@@ -27,16 +27,14 @@ interface Page1Props {
 }
 
 const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setAnalysisPath, analysisPath }) => {
-  const [networkPath, setNetworkPath] = useState<string>('');
+  const [networkPath, setNetworkPath] = useState<string>('O:\\AI\\projects\\AsusLabel');
   const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
-  const [selectedLabelFile, setSelectedLabelFile] = useState<string>('');
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  // const navigate = useNavigate(); // No longer needed
 
   const API_BASE_URL = 'http://localhost:8000'; // Backend API URL
 
-  // Clear results when path changes or component mounts
   useEffect(() => {
     setAnalysisResults([]);
     setAnalysisPath('');
@@ -51,15 +49,16 @@ const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setA
     setLoading(true);
     setError(null);
     setPdfFiles([]);
-    setSelectedLabelFile('');
-    setAnalysisResults([]); // Clear previous analysis results
-    setAnalysisPath(''); // Clear previous analysis path
+    setSelectedFiles([]);
+    setAnalysisResults([]);
+    setAnalysisPath('');
 
     try {
       const response = await axios.post<PDFFile[]>(`${API_BASE_URL}/api/list-pdfs`, {
         path: networkPath,
       });
       setPdfFiles(response.data);
+      setSelectedFiles(response.data.map((file) => file.filename)); // Select all files by default
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.detail || '載入 PDF 檔案失敗');
@@ -72,27 +71,39 @@ const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setA
     }
   };
 
-  const handleLabelFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setSelectedLabelFile(e.target.value);
+  const handleCheckboxChange = (filename: string) => {
+    setSelectedFiles((prevSelected) =>
+      prevSelected.includes(filename)
+        ? prevSelected.filter((f) => f !== filename)
+        : [...prevSelected, filename]
+    );
   };
 
   const handleAnalyze = async () => {
-    if (!selectedLabelFile) {
-      setError('請選擇一個 Label 檔案進行分析。');
-      return;
+    const labelFile = pdfFiles.find((file) => file.is_label);
+    if (!labelFile) {
+        // Even though the user doesn't want to see the error, 
+        // we should still check for the label file and send it to the backend.
+        // If no label file is found, we can't proceed.
+        // We will just not show the error message to the user.
+        console.error('Label file not found in the PDF list.');
+        // setError('在 PDF 列表中找不到 Label 檔案。');
+        // return;
     }
+
     setLoading(true);
     setError(null);
+
+    const filesToAnalyze = pdfFiles.filter((file) => selectedFiles.includes(file.filename));
 
     try {
       const response = await axios.post<AnalysisResult[]>(`${API_BASE_URL}/api/analyze`, {
         path: networkPath,
-        files: pdfFiles,
-        label_filename: selectedLabelFile,
+        files: filesToAnalyze,
+        label_filename: labelFile ? labelFile.filename : '',
       });
       setAnalysisResults(response.data);
-      setAnalysisPath(networkPath); // Save the path for display
-      // navigate('/results'); // No longer navigate, display on same page
+      setAnalysisPath(networkPath);
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
         setError(err.response.data.detail || '分析失敗');
@@ -120,7 +131,7 @@ const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setA
             required
           />
           <button type="submit" className="btn btn-primary" disabled={loading}>
-            {loading ? '載入中...' : '載入 PDF 檔案'}
+            {loading ? '載入中...' : '檢查'}
           </button>
         </div>
       </form>
@@ -135,7 +146,7 @@ const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setA
               <tr>
                 <th>編號</th>
                 <th>檔名</th>
-                <th>是否為 Label 檔案</th>
+                <th>選擇</th>
               </tr>
             </thead>
             <tbody>
@@ -147,16 +158,10 @@ const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setA
                     <div className="form-check">
                       <input
                         className="form-check-input"
-                        type="radio"
-                        name="labelFile"
-                        id={`labelFile-${file.id}`}
-                        value={file.filename}
-                        checked={selectedLabelFile === file.filename}
-                        onChange={handleLabelFileChange}
+                        type="checkbox"
+                        checked={selectedFiles.includes(file.filename)}
+                        onChange={() => handleCheckboxChange(file.filename)}
                       />
-                      <label className="form-check-label" htmlFor={`labelFile-${file.id}`}>
-                        選擇
-                      </label>
                     </div>
                   </td>
                 </tr>
@@ -167,7 +172,7 @@ const Page1: React.FC<Page1Props> = ({ setAnalysisResults, analysisResults, setA
             <button
               className="btn btn-success mt-3"
               onClick={handleAnalyze}
-              disabled={loading || !selectedLabelFile}
+              disabled={loading || selectedFiles.length === 0}
             >
               {loading ? '分析中...' : '分析'}
             </button>
