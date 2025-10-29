@@ -1,17 +1,6 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Page1 from './Page1';
-
-interface AnalysisResult {
-  id: number;
-  filename: string;
-  model_name: string;
-  voltage: string;
-  typ_batt_capacity_wh: string;
-  typ_capacity_mah: string;
-  rated_capacity_mah: string;
-  rated_energy_wh: string;
-}
+import Page1, { AnalysisResult } from './Page1';
 
 function App() {
   const [analysisResults, setAnalysisResults] = useState<AnalysisResult[]>([]);

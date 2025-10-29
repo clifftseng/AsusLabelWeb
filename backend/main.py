@@ -1,38 +1,49 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
+import asyncio
 import os
-import time # For simulating analysis delay
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+from uuid import uuid4
 
-app = FastAPI()
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-# Configure CORS to allow communication from the frontend
-origins = [
-    "http://localhost",
-    "http://localhost:3000",  # Assuming React dev server runs on port 3000
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+from analysis_components import (
+    AnalysisEngine,
+    PDFDocumentLoader,
+    build_default_engine,
 )
+
+try:
+    from openpyxl import Workbook
+except ImportError:  # pragma: no cover - defensive guard for runtime
+    Workbook = None  # type: ignore[assignment]
+
+BASE_WORKDIR = Path(
+    os.getenv("ANALYSIS_JOBS_DIR", Path(__file__).resolve().parent / "job_runs")
+).resolve()
+BASE_WORKDIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_MAX_CONCURRENT_JOBS = max(1, int(os.getenv("ANALYSIS_MAX_CONCURRENT", "2")))
+
 
 class PDFFile(BaseModel):
     id: int
     filename: str
     is_label: bool = False
 
+
 class ListPDFsRequest(BaseModel):
     path: str
+
 
 class AnalyzeRequest(BaseModel):
     path: str
     files: List[PDFFile]
-    label_filename: str
+    label_filename: str | None = None
+
 
 class AnalysisResult(BaseModel):
     id: int
@@ -44,62 +55,447 @@ class AnalysisResult(BaseModel):
     rated_capacity_mah: str
     rated_energy_wh: str
 
+
+class JobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"
+
+
+class StartAnalysisResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+
+
+class AnalysisStatusResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    progress: float
+    processed_count: int
+    total_count: int
+    results: List[AnalysisResult]
+    download_ready: bool
+    download_path: str | None
+    error: str | None = None
+    current_file: str | None = None
+    messages: List[str] = []
+
+
+class StopAnalysisResponse(AnalysisStatusResponse):
+    pass
+
+
+@dataclass
+class PipelineResult:
+    download_path: Optional[Path]
+    error: Optional[str] = None
+
+
+@dataclass
+class AnalysisJobState:
+    job_id: str
+    request: AnalyzeRequest
+    job_dir: Path
+    status: JobStatus = JobStatus.QUEUED
+    progress: float = 0.0
+    processed_count: int = 0
+    total_count: int = 0
+    results: List[AnalysisResult] = field(default_factory=list)
+    current_file: Optional[str] = None
+    download_path: Optional[Path] = None
+    error: Optional[str] = None
+    messages: List[str] = field(default_factory=list)
+    task: Optional[asyncio.Task] = None
+    cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def snapshot(self) -> AnalysisStatusResponse:
+        async with self.lock:
+            download_ready = bool(self.download_path and self.download_path.exists())
+            return AnalysisStatusResponse(
+                job_id=self.job_id,
+                status=self.status,
+                progress=round(self.progress, 2),
+                processed_count=self.processed_count,
+                total_count=self.total_count,
+                results=[result.model_copy(deep=True) for result in self.results],
+                download_ready=download_ready,
+                download_path=str(self.download_path) if download_ready else None,
+                error=self.error,
+                current_file=self.current_file,
+                messages=list(self.messages),
+            )
+
+    async def update_total(self, total: int) -> None:
+        async with self.lock:
+            self.total_count = total
+
+    async def add_message(self, message: str) -> None:
+        async with self.lock:
+            self.messages.append(message)
+
+
+class JobCallbacks:
+    def __init__(self, job: AnalysisJobState) -> None:
+        self.job = job
+
+    async def set_total(self, total_count: int) -> None:
+        await self.job.update_total(total_count)
+
+    async def set_current_file(self, filename: Optional[str]) -> None:
+        async with self.job.lock:
+            self.job.current_file = filename
+
+    async def add_result(self, result: AnalysisResult) -> None:
+        async with self.job.lock:
+            self.job.results.append(result)
+            self.job.processed_count = len(self.job.results)
+            if self.job.total_count:
+                self.job.progress = min(100.0, (self.job.processed_count / self.job.total_count) * 100)
+
+    async def add_message(self, message: str) -> None:
+        await self.job.add_message(message)
+
+    def should_cancel(self) -> bool:
+        return self.job.cancel_event.is_set()
+
+    async def mark_download(self, output_path: Optional[Path]) -> None:
+        async with self.job.lock:
+            self.job.download_path = output_path
+            if output_path and self.job.status == JobStatus.RUNNING:
+                self.job.progress = 100.0
+
+
+class AnalysisPipeline:
+    async def run(self, job: AnalysisJobState, callbacks: JobCallbacks) -> PipelineResult:
+        raise NotImplementedError
+
+
+class DefaultAnalysisPipeline(AnalysisPipeline):
+    def __init__(
+        self,
+        *,
+        document_loader: Optional[PDFDocumentLoader] = None,
+        analysis_engine: Optional[AnalysisEngine] = None,
+        sleep_seconds: float = 0.05,
+    ) -> None:
+        self.document_loader = document_loader or PDFDocumentLoader()
+        self.analysis_engine = analysis_engine or build_default_engine()
+        self.sleep_seconds = sleep_seconds
+
+    async def run(self, job: AnalysisJobState, callbacks: JobCallbacks) -> PipelineResult:
+        source_path = Path(job.request.path)
+        if not source_path.exists():
+            raise FileNotFoundError(f"找不到來源路徑: {job.request.path}")
+
+        files = job.request.files
+        if not files:
+            await callbacks.add_message("沒有可供分析的 PDF 檔案。")
+            await callbacks.mark_download(None)
+            return PipelineResult(download_path=None)
+
+        await callbacks.set_total(len(files))
+        job.job_dir.mkdir(parents=True, exist_ok=True)
+
+        label_filename = (job.request.label_filename or '').strip()
+        label_fields: Optional[Dict[str, Any]] = None
+        results: List[AnalysisResult] = []
+
+        for index, pdf_file in enumerate(files, start=1):
+            if callbacks.should_cancel():
+                await callbacks.add_message("分析已被使用者中止。")
+                await callbacks.set_current_file(None)
+                return PipelineResult(download_path=None)
+
+            file_path = source_path / pdf_file.filename
+            if not file_path.exists():
+                raise FileNotFoundError(f"找不到檔案: {file_path}")
+
+            await callbacks.set_current_file(pdf_file.filename)
+            await callbacks.add_message(f"開始分析 {pdf_file.filename}")
+
+            document = self.document_loader.load(file_path)
+
+            try:
+                raw_fields = await self.analysis_engine.analyse(document, label_hint=label_fields)
+            except Exception as exc:
+                await callbacks.add_message(f"{pdf_file.filename} 分析失敗：{exc}")
+                raise
+
+            result = self._build_result(index, pdf_file.filename, raw_fields)
+            await callbacks.add_result(result)
+            results.append(result)
+            await callbacks.add_message(f"{pdf_file.filename} 分析完成 ({index}/{len(files)})")
+
+            if pdf_file.is_label or (label_filename and pdf_file.filename == label_filename):
+                label_fields = raw_fields
+
+            if self.sleep_seconds:
+                await asyncio.sleep(self.sleep_seconds)
+
+        if not results:
+            await callbacks.add_message("沒有產生任何分析結果。")
+            await callbacks.mark_download(None)
+            return PipelineResult(download_path=None)
+
+        excel_path = self._write_excel(job.job_dir, results)
+        await callbacks.add_message(f"已匯出分析結果 {excel_path.name}")
+        await callbacks.mark_download(excel_path)
+        await callbacks.set_current_file(None)
+        return PipelineResult(download_path=excel_path)
+
+    def _build_result(self, index: int, filename: str, fields: Dict[str, Any]) -> AnalysisResult:
+        def as_text(key: str) -> str:
+            value = fields.get(key, '')
+            if value is None:
+                return ''
+            return str(value).strip()
+
+        return AnalysisResult(
+            id=index,
+            filename=filename,
+            model_name=as_text('model_name'),
+            voltage=as_text('voltage'),
+            typ_batt_capacity_wh=as_text('typ_batt_capacity_wh'),
+            typ_capacity_mah=as_text('typ_capacity_mah'),
+            rated_capacity_mah=as_text('rated_capacity_mah'),
+            rated_energy_wh=as_text('rated_energy_wh'),
+        )
+
+    def _write_excel(self, job_dir: Path, results: List[AnalysisResult]) -> Path:
+        if Workbook is None:
+            raise RuntimeError('openpyxl 未安裝，無法匯出 Excel')
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = 'Analysis'
+        headers = [
+            'ID',
+            'Filename',
+            'Model Name',
+            'Voltage',
+            'Typ Batt Capacity Wh',
+            'Typ Capacity mAh',
+            'Rated Capacity mAh',
+            'Rated Energy Wh',
+        ]
+        worksheet.append(headers)
+        for item in results:
+            worksheet.append(
+                [
+                    item.id,
+                    item.filename,
+                    item.model_name,
+                    item.voltage,
+                    item.typ_batt_capacity_wh,
+                    item.typ_capacity_mah,
+                    item.rated_capacity_mah,
+                    item.rated_energy_wh,
+                ]
+            )
+        job_dir.mkdir(parents=True, exist_ok=True)
+        output_path = job_dir / 'analysis_result.xlsx'
+        workbook.save(output_path)
+        return output_path
+
+class AnalysisManager:
+    def __init__(
+        self,
+        pipeline_factory: Callable[[], AnalysisPipeline],
+        *,
+        max_concurrent_jobs: int | None = None,
+        base_dir: Optional[Path] = None,
+    ) -> None:
+        self.pipeline_factory = pipeline_factory
+        self.jobs: Dict[str, AnalysisJobState] = {}
+        self.lock = asyncio.Lock()
+        self.max_concurrent_jobs = max(
+            1, max_concurrent_jobs if max_concurrent_jobs is not None else DEFAULT_MAX_CONCURRENT_JOBS
+        )
+        self.base_dir = Path(base_dir) if base_dir is not None else BASE_WORKDIR
+        self.base_dir.mkdir(parents=True, exist_ok=True)
+        self._semaphore = asyncio.Semaphore(self.max_concurrent_jobs)
+
+    async def start_job(self, request: AnalyzeRequest | Dict[str, Any]) -> StartAnalysisResponse:
+        payload = request if isinstance(request, AnalyzeRequest) else AnalyzeRequest(**request)
+        job_id = uuid4().hex
+        job_dir = self.base_dir / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        job = AnalysisJobState(job_id=job_id, request=payload, job_dir=job_dir)
+        async with self.lock:
+            self.jobs[job_id] = job
+
+        await job.add_message("Job queued for processing")
+        job.task = asyncio.create_task(self._job_runner(job))
+        return StartAnalysisResponse(job_id=job_id, status=job.status)
+
+    async def get_status(self, job_id: str) -> AnalysisStatusResponse:
+        job = await self._get_job(job_id)
+        return await job.snapshot()
+
+    async def stop_job(self, job_id: str) -> StopAnalysisResponse:
+        job = await self._get_job(job_id)
+        job.cancel_event.set()
+        if job.task and not job.task.done():
+            try:
+                await job.task
+            except asyncio.CancelledError:
+                pass
+        async with job.lock:
+            if job.status == JobStatus.RUNNING:
+                job.status = JobStatus.CANCELLED
+                job.progress = min(job.progress, 99.0)
+        return await job.snapshot()  # type: ignore[return-value]
+
+    async def get_download_path(self, job_id: str) -> Optional[Path]:
+        job = await self._get_job(job_id)
+        async with job.lock:
+            return job.download_path if job.download_path and job.download_path.exists() else None
+
+    async def _run_job(self, job: AnalysisJobState) -> None:
+        async with job.lock:
+            job.status = JobStatus.RUNNING
+            job.progress = 0.0
+            job.messages.clear()
+
+        pipeline = self.pipeline_factory()
+        callbacks = JobCallbacks(job)
+        try:
+            result = await pipeline.run(job, callbacks)
+            if job.cancel_event.is_set():
+                async with job.lock:
+                    job.status = JobStatus.CANCELLED
+                    job.progress = min(job.progress, 99.0)
+            elif result.error:
+                async with job.lock:
+                    job.status = JobStatus.FAILED
+                    job.error = result.error
+            else:
+                async with job.lock:
+                    job.status = JobStatus.COMPLETED
+                    job.progress = 100.0
+        except asyncio.CancelledError:
+            async with job.lock:
+                job.status = JobStatus.CANCELLED
+        except Exception as exc:  # pragma: no cover - sentry for unexpected errors
+            async with job.lock:
+                job.status = JobStatus.FAILED
+                job.error = str(exc)
+        finally:
+            async with job.lock:
+                job.current_file = None
+
+    async def _job_runner(self, job: AnalysisJobState) -> None:
+        async with self._semaphore:
+            if job.cancel_event.is_set():
+                async with job.lock:
+                    job.status = JobStatus.CANCELLED
+                    job.progress = 0.0
+                    job.current_file = None
+                return
+            await self._run_job(job)
+
+    async def _get_job(self, job_id: str) -> AnalysisJobState:
+        async with self.lock:
+            if job_id not in self.jobs:
+                raise HTTPException(status_code=404, detail=f"找不到工作 {job_id}")
+            return self.jobs[job_id]
+
+
+def get_analysis_manager() -> AnalysisManager:
+    global analysis_manager
+    return analysis_manager
+
+
+app = FastAPI()
+
+origins = [
+    "http://localhost",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @app.get("/")
-async def read_root():
+async def read_root() -> Dict[str, str]:
     return {"message": "Welcome to the ASUS Label Analysis Backend!"}
 
+
+def _normalise_path(path_str: str) -> Path:
+    if path_str.startswith("\\\\"):
+        return Path(path_str)
+    return Path(path_str)
+
+
 @app.post("/api/list-pdfs", response_model=List[PDFFile])
-async def list_pdfs(request: ListPDFsRequest):
-    """
-    接收一個網路路徑，列出該路徑下第一層的所有 PDF 檔案。
-    """
-    target_path = request.path.replace('\\', '//').replace('\\', '/') # Normalize path for os module
-    
-    # Basic validation for path
-    if not os.path.exists(target_path):
+async def list_pdfs(request: ListPDFsRequest) -> List[PDFFile]:
+    target_path = _normalise_path(request.path)
+    if not target_path.exists():
         raise HTTPException(status_code=404, detail=f"Path not found: {request.path}")
-    if not os.path.isdir(target_path):
+    if not target_path.is_dir():
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {request.path}")
 
-    pdf_files = []
+    pdf_files: List[PDFFile] = []
     try:
-        for i, entry in enumerate(os.listdir(target_path)):
-            full_path = os.path.join(target_path, entry)
-            if os.path.isfile(full_path) and entry.lower().endswith('.pdf'):
-                pdf_files.append(PDFFile(id=i + 1, filename=entry))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
-    
+        entries = sorted(entry for entry in target_path.iterdir() if entry.is_file() and entry.suffix.lower() == ".pdf")
+        for index, entry in enumerate(entries, start=1):
+            pdf_files.append(PDFFile(id=index, filename=entry.name))
+    except Exception as exc:  # pragma: no cover - filesystem guard
+        raise HTTPException(status_code=500, detail=f"Error listing files: {exc}") from exc
     return pdf_files
 
-@app.post("/api/analyze", response_model=List[AnalysisResult])
-async def analyze_files(request: AnalyzeRequest):
-    """
-    接收網路路徑、PDF 檔案列表及指定的 Label 檔案，模擬分析並回傳結果。
-    """
-    print(f"Received analysis request for path: {request.path}")
-    print(f"Label file: {request.label_filename}")
-    print(f"Files to analyze: {[f.filename for f in request.files]}")
 
-    # Simulate analysis time
-    time.sleep(2) 
+@app.post("/api/analyze/start", response_model=StartAnalysisResponse)
+async def start_analysis(
+    request: AnalyzeRequest,
+    manager: AnalysisManager = Depends(get_analysis_manager),
+) -> StartAnalysisResponse:
+    return await manager.start_job(request)
 
-    # Mock analysis results based on the provided files
-    results = []
-    for i, file in enumerate(request.files):
-        # Generate some dummy data for demonstration
-        results.append(AnalysisResult(
-            id=i + 1,
-            filename=file.filename,
-            model_name=f"Model_{i+1}",
-            voltage=f"{12 + i}V",
-            typ_batt_capacity_wh=f"{50 + i*5}Wh",
-            typ_capacity_mah=f"{4000 + i*100}mAh",
-            rated_capacity_mah=f"{3800 + i*90}mAh",
-            rated_energy_wh=f"{48 + i*4}Wh"
-        ))
-    return results
+
+@app.get("/api/analyze/status/{job_id}", response_model=AnalysisStatusResponse)
+async def get_analysis_status(
+    job_id: str,
+    manager: AnalysisManager = Depends(get_analysis_manager),
+) -> AnalysisStatusResponse:
+    return await manager.get_status(job_id)
+
+
+@app.post("/api/analyze/stop/{job_id}", response_model=StopAnalysisResponse)
+async def stop_analysis(
+    job_id: str,
+    manager: AnalysisManager = Depends(get_analysis_manager),
+) -> StopAnalysisResponse:
+    return await manager.stop_job(job_id)
+
+
+@app.get("/api/analyze/download/{job_id}")
+async def download_analysis(
+    job_id: str,
+    manager: AnalysisManager = Depends(get_analysis_manager),
+) -> FileResponse:
+    download_path = await manager.get_download_path(job_id)
+    if not download_path:
+        raise HTTPException(status_code=404, detail="分析結果尚未準備好。")
+    return FileResponse(
+        path=download_path,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=download_path.name,
+    )
+
+
+analysis_manager = AnalysisManager(pipeline_factory=lambda: DefaultAnalysisPipeline())
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
