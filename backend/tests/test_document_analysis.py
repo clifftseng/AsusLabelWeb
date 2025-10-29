@@ -76,7 +76,7 @@ async def test_format_guided_extractor_reads_bbox(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_label_analysis_service_merges_format_and_engine(tmp_path: Path):
+async def test_label_analysis_service_mode_a_uses_format_only(tmp_path: Path):
     pdf_path = tmp_path / 'battery.pdf'
     _create_pdf(
         pdf_path,
@@ -110,9 +110,8 @@ async def test_label_analysis_service_merges_format_and_engine(tmp_path: Path):
 
     fields, messages = await service.analyse(pdf_path)
 
-    assert fields['model_name'] == 'Model Name: FMT-123'
-    assert fields['voltage'] == '12.5V'
-    assert any('格式樣板' in message for message in messages)
+    assert fields == {'model_name': 'Model Name: FMT-123'}
+    assert any('Mode A' in message for message in messages)
 
 
 @pytest.mark.anyio
@@ -159,7 +158,7 @@ async def test_document_intelligence_extractor_uses_client(tmp_path: Path):
 
 
 @pytest.mark.anyio
-async def test_label_analysis_service_merges_document_intelligence_results(tmp_path: Path):
+async def test_label_analysis_service_mode_b_uses_document_intelligence(tmp_path: Path):
     pdf_path = tmp_path / 'battery.pdf'
     _create_pdf(
         pdf_path,
@@ -168,34 +167,21 @@ async def test_label_analysis_service_merges_document_intelligence_results(tmp_p
         ],
     )
 
-    spec_payload = {
-        'hints': [
-            {'field': 'voltage', 'page': 1, 'bbox': [60, 60, 400, 30]},
-        ]
-    }
-    format_dir = tmp_path / 'format'
-    format_dir.mkdir()
-    (format_dir / 'battery.json').write_text(json.dumps(spec_payload))
-
-    repository = FormatRepository(format_dir)
-
     class StubDIExtractor:
-        async def extract(self, _pdf_path: Path, _spec: FormatSpec) -> Dict[str, str]:
-            return {'voltage': '10.8V'}
-
-    class EmptyFormatExtractor:
-        async def extract(self, _pdf_path: Path, _spec: FormatSpec) -> Dict[str, str]:
-            return {}
+        async def extract_full_pages(self, _pdf_path: Path, pages: list[int]) -> Dict[int, str]:
+            assert pages == [1]
+            return {1: 'Nominal Voltage: 10.8V'}
 
     service = LabelAnalysisService(
         document_loader=PDFDocumentLoader(max_pages=1),
         analysis_engine=HeuristicAnalysisEngine(),
-        format_repository=repository,
-        extractor=EmptyFormatExtractor(),  # type: ignore[arg-type]
+        format_repository=None,
         document_intelligence_extractor=StubDIExtractor(),  # type: ignore[arg-type]
+        max_prediction_pages=1,
     )
 
     fields, messages = await service.analyse(pdf_path)
 
     assert fields['voltage'] == '10.8V'
-    assert any('Document Intelligence' in message for message in messages)
+    assert any('Mode B' in message for message in messages)
+    assert any('Document Intelligence returned text' in message for message in messages)

@@ -3,12 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 import fitz  # type: ignore[import]
-from analysis_components import AnalysisEngine, PDFDocumentLoader
+from analysis_components import AnalysisEngine, ExtractedDocument, ExtractedPage, PDFDocumentLoader
 
 try:  # Optional Azure dependencies
     from azure.ai.formrecognizer import DocumentAnalysisClient  # type: ignore[import]
@@ -184,8 +185,38 @@ class AzureDocumentIntelligenceExtractor:
                     lines.append(text)
         return "\n".join(lines).strip()
 
+    async def extract_full_pages(self, pdf_path: Path, pages: List[int]) -> Dict[int, str]:
+        return await asyncio.to_thread(self._extract_full_pages_sync, pdf_path, pages)
+
+    def _extract_full_pages_sync(self, pdf_path: Path, pages: List[int]) -> Dict[int, str]:
+        results: Dict[int, str] = {}
+        unique_pages = sorted(set(page for page in pages if page > 0))
+        if not unique_pages:
+            return results
+        with fitz.open(pdf_path) as doc:
+            for page_number in unique_pages:
+                index = page_number - 1
+                if index < 0 or index >= len(doc):
+                    continue
+                page = doc[index]
+                pixmap = page.get_pixmap(dpi=180)
+                text = self._analyse_bytes(pixmap.tobytes("png"))
+                if text:
+                    results[page_number] = text
+        return results
+
 
 class LabelAnalysisService:
+    _MODE_B_KEYWORDS = [
+        "model",
+        "voltage",
+        "capacity",
+        "energy",
+        "mah",
+        "wh",
+        "battery",
+    ]
+
     def __init__(
         self,
         *,
@@ -194,34 +225,142 @@ class LabelAnalysisService:
         format_repository: Optional[FormatRepository] = None,
         extractor: Optional[FormatGuidedExtractor] = None,
         document_intelligence_extractor: Optional[AzureDocumentIntelligenceExtractor] = None,
+        max_prediction_pages: int = 3,
     ) -> None:
         self.document_loader = document_loader
         self.analysis_engine = analysis_engine
         self.format_repository = format_repository
         self.extractor = extractor or FormatGuidedExtractor()
         self.document_intelligence_extractor = document_intelligence_extractor
+        self.max_prediction_pages = max(1, max_prediction_pages)
 
     async def analyse(self, pdf_path: Path) -> tuple[Dict[str, str], List[str]]:
         messages: List[str] = []
-        format_fields: Dict[str, str] = {}
+        log = messages.append
 
         spec = self.format_repository.find_for_pdf(pdf_path) if self.format_repository else None
         if spec and spec.hints:
-            format_fields = await self.extractor.extract(pdf_path, spec)
-            if format_fields:
-                messages.append(f"使用格式樣板 {spec.name} 提取 {len(format_fields)} 項資料。")
+            fields = await self._run_mode_a(pdf_path, spec, log)
+        else:
+            fields = await self._run_mode_b(pdf_path, log)
+        return fields, messages
 
-        if spec and spec.hints and self.document_intelligence_extractor:
-            di_fields = await self.document_intelligence_extractor.extract(pdf_path, spec)
-            if di_fields:
-                messages.append(f"Document Intelligence 提取 {len(di_fields)} 項資料。")
-                for key, value in di_fields.items():
-                    if key not in format_fields and value:
-                        format_fields[key] = value
+    async def _run_mode_a(
+        self,
+        pdf_path: Path,
+        spec: FormatSpec,
+        log: Callable[[str], None],
+    ) -> Dict[str, str]:
+        log(f"[Mode A] Matched format {spec.name} with {len(spec.hints)} hints")
+        if not self.extractor:
+            log("[Mode A] No extractor configured for format workflow")
+            return {}
+        try:
+            fields = await self.extractor.extract(pdf_path, spec)
+        except Exception as exc:  # pragma: no cover - defensive path
+            log(f"[Mode A] Format-guided extraction failed: {exc}")
+            return {}
 
-        document = self.document_loader.load(pdf_path)
-        label_hint = format_fields if format_fields else None
-        engine_fields = await self.analysis_engine.analyse(document, label_hint=label_hint)
-        combined = dict(engine_fields)
-        combined.update(format_fields)
-        return combined, messages
+        if fields:
+            log(f"[Mode A] Extracted {len(fields)} fields via format hints")
+        else:
+            log("[Mode A] Format extraction returned no fields")
+        return fields
+
+    async def _run_mode_b(
+        self,
+        pdf_path: Path,
+        log: Callable[[str], None],
+    ) -> Dict[str, str]:
+        log("[Mode B] No matching format, using AI workflow")
+        pages_to_process = self._predict_relevant_pages(pdf_path, log)
+        if pages_to_process:
+            log(f"[Mode B] Predicted pages: {pages_to_process}")
+        else:
+            log("[Mode B] Could not predict pages, using default range")
+            pages_to_process = None
+
+        ai_page_texts = await self._gather_page_texts(pdf_path, pages_to_process or [], log)
+        document = self._build_document_for_mode_b(pdf_path, ai_page_texts, pages_to_process)
+
+        fields = await self.analysis_engine.analyse(document)
+        log(f"[Mode B] Completed analysis with {self._count_non_empty(fields)} populated fields")
+        return fields
+
+    async def _gather_page_texts(
+        self,
+        pdf_path: Path,
+        pages: List[int],
+        log: Callable[[str], None],
+    ) -> Dict[int, str]:
+        if not pages or not self.document_intelligence_extractor:
+            return {}
+        try:
+            texts = await self.document_intelligence_extractor.extract_full_pages(pdf_path, pages)
+        except Exception as exc:  # pragma: no cover - defensive path
+            log(f"[Mode B] Document Intelligence failed: {exc}")
+            return {}
+
+        filtered = {page: text for page, text in texts.items() if isinstance(text, str) and text.strip()}
+        if filtered:
+            log(f"[Mode B] Document Intelligence returned text for {len(filtered)} pages")
+        else:
+            log("[Mode B] Document Intelligence returned no usable text")
+        return filtered
+
+    def _predict_relevant_pages(self, pdf_path: Path, log: Callable[[str], None]) -> List[int]:
+        predicted: List[int] = []
+        total_pages = 0
+        try:
+            with fitz.open(pdf_path) as doc:
+                total_pages = len(doc)
+                for index, page in enumerate(doc, start=1):
+                    text = page.get_text().lower()
+                    if any(keyword in text for keyword in self._MODE_B_KEYWORDS):
+                        predicted.append(index)
+                    if len(predicted) >= self.max_prediction_pages:
+                        break
+        except Exception as exc:  # pragma: no cover - defensive path
+            log(f"[Mode B] Page prediction failed: {exc}")
+            return []
+
+        if not predicted and total_pages:
+            limit = min(self.max_prediction_pages, total_pages)
+            return list(range(1, limit + 1))
+        return predicted
+
+    def _build_document_for_mode_b(
+        self,
+        pdf_path: Path,
+        page_texts: Dict[int, str],
+        pages_requested: Optional[List[int]],
+    ) -> ExtractedDocument:
+        if page_texts:
+            pages = [
+                ExtractedPage(number=page, text=text)
+                for page, text in sorted(page_texts.items())
+            ]
+            return ExtractedDocument(path=pdf_path, pages=pages)
+        return self._load_document(pdf_path, pages_requested)
+
+    def _load_document(self, pdf_path: Path, pages: Optional[List[int]]) -> ExtractedDocument:
+        if not pages:
+            return self.document_loader.load(pdf_path)
+
+        unique_pages = sorted(set(page for page in pages if page > 0))
+        extracted_pages: List[ExtractedPage] = []
+        with fitz.open(pdf_path) as doc:
+            for page_number in unique_pages:
+                index = page_number - 1
+                if index < 0 or index >= len(doc):
+                    continue
+                text = doc[index].get_text()
+                extracted_pages.append(ExtractedPage(number=page_number, text=text))
+
+        if not extracted_pages:
+            return self.document_loader.load(pdf_path)
+        return ExtractedDocument(path=pdf_path, pages=extracted_pages)
+
+    @staticmethod
+    def _count_non_empty(payload: Dict[str, str]) -> int:
+        return sum(1 for value in payload.values() if isinstance(value, str) and value.strip())
