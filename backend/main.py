@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging # Import the logging module
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -26,6 +27,10 @@ from settings import ensure_env_loaded
 
 ensure_env_loaded()
 
+# Get a logger instance for this module
+logger = logging.getLogger(__name__)
+logging.getLogger('azure.core.pipeline.policies.http_logging_policy').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 try:
     from openpyxl import Workbook
     from openpyxl.styles import PatternFill
@@ -144,6 +149,7 @@ class AnalysisJobState:
     async def add_message(self, message: str) -> None:
         async with self.lock:
             self.messages.append(message)
+            logger.info(f"Job {self.job_id}: {message}") # Log the message
 
 
 class JobCallbacks:
@@ -230,13 +236,19 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
         )
 
     async def run(self, job: AnalysisJobState, callbacks: JobCallbacks) -> PipelineResult:
+        try:
+            return await self._run_internal(job, callbacks)
+        finally:
+            await self._close_label_service()
+
+    async def _run_internal(self, job: AnalysisJobState, callbacks: JobCallbacks) -> PipelineResult:
         source_path = Path(job.request.path)
         if not source_path.exists():
-            raise FileNotFoundError(f"找不到來源路徑: {job.request.path}")
+            raise FileNotFoundError(f"�䤣��ӷ����|: {job.request.path}")
 
         files = job.request.files
         if not files:
-            await callbacks.add_message("沒有可供分析的 PDF 檔案。")
+            await callbacks.add_message("No PDF files to analyse.")
             await callbacks.mark_download(None)
             return PipelineResult(download_path=None)
 
@@ -247,21 +259,21 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
 
         for index, pdf_file in enumerate(files, start=1):
             if callbacks.should_cancel():
-                await callbacks.add_message("分析已被使用者中止。")
+                await callbacks.add_message("Analysis cancelled by user.")
                 await callbacks.set_current_file(None)
                 return PipelineResult(download_path=None)
 
             file_path = source_path / pdf_file.filename
             if not file_path.exists():
-                raise FileNotFoundError(f"找不到檔案: {file_path}")
+                raise FileNotFoundError(f"�䤣���ɮ�: {file_path}")
 
             await callbacks.set_current_file(pdf_file.filename)
-            await callbacks.add_message(f"開始分析 {pdf_file.filename}")
+            await callbacks.add_message(f"Starting analysis {pdf_file.filename}")
 
             try:
                 raw_fields, extra_messages = await self._analyse_document(file_path)
             except Exception as exc:
-                await callbacks.add_message(f"{pdf_file.filename} 分析失敗：{exc}")
+                await callbacks.add_message(f"{pdf_file.filename} analysis failed: {exc}")
                 raise
 
             for message in extra_messages:
@@ -269,22 +281,41 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
 
             result = self._build_result(index, pdf_file.filename, raw_fields)
             await callbacks.add_result(result)
+
+            logger.info(
+                "%s fields: model_name=%r, voltage=%r, typ_batt_capacity_wh=%r, "
+                "typ_capacity_mah=%r, rated_capacity_mah=%r, rated_energy_wh=%r",
+                pdf_file.filename,
+                result.model_name,
+                result.voltage,
+                result.typ_batt_capacity_wh,
+                result.typ_capacity_mah,
+                result.rated_capacity_mah,
+                result.rated_energy_wh,
+            )
+
             results.append(result)
-            await callbacks.add_message(f"{pdf_file.filename} 分析完成 ({index}/{len(files)})")
+            await callbacks.add_message(f"{pdf_file.filename} completed ({index}/{len(files)})")
 
             if self.sleep_seconds:
                 await asyncio.sleep(self.sleep_seconds)
 
         if not results:
-            await callbacks.add_message("沒有產生任何分析結果。")
+            await callbacks.add_message("No analysis results generated.")
             await callbacks.mark_download(None)
             return PipelineResult(download_path=None)
 
         excel_path = self._write_excel(job.job_dir, results)
-        await callbacks.add_message(f"已匯出分析結果 {excel_path.name}")
+        await callbacks.add_message(f"Exported analysis results to {excel_path.name}")
         await callbacks.mark_download(excel_path)
         await callbacks.set_current_file(None)
         return PipelineResult(download_path=excel_path)
+
+    async def _close_label_service(self) -> None:
+        closer = getattr(self.label_service, "aclose", None)
+        if closer is None:
+            return
+        await closer()
 
     def _build_result(self, index: int, filename: str, fields: Dict[str, Any]) -> AnalysisResult:
         def as_text(key: str) -> str:
@@ -307,7 +338,7 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
     async def _analyse_document(self, file_path: Path) -> tuple[Dict[str, Any], List[str]]:
         if self.label_service:
             return await self.label_service.analyse(file_path)
-        document = self.document_loader.load(file_path)
+        document = await asyncio.to_thread(self.document_loader.load, file_path)
         fields = await self.analysis_engine.analyse(document)
         return fields, []
 
@@ -438,6 +469,7 @@ class AnalysisManager:
             async with job.lock:
                 job.status = JobStatus.FAILED
                 job.error = str(exc)
+                logger.exception(f"Job {job.job_id} failed with an unexpected error.") # Log the exception
         finally:
             async with job.lock:
                 job.current_file = None

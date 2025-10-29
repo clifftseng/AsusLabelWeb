@@ -26,4 +26,71 @@ DOCUMENT_INTELLIGENCE_KEY=""
 請列出你的執行計畫，估計要拆成幾個sprint?
 請先列出來跟我討論後，再決定怎麼執行。
 
+Prompt開始
 
+  您好，我需要您扮演一位資深的 Python 開發專家，協助我重構一個現有專案的程式碼。
+
+  主要目標：
+
+  請修改我的 backend 應用程式中處理 PDF 文件的核心邏輯，使其處理流程與 ref/processing_module.py 中的邏輯保持一致。請注意：僅修改文件處理與分析的內部邏輯，不要改動任何 API
+  端點、任務管理或其他非核心分析部分的程式碼。
+
+  專案背景：
+
+   * `backend`：這是一個 FastAPI Web 應用，它接收分析 PDF 的請求，並透過 LabelAnalysisService 類別來執行分析。
+   * `ref/processing_module.py`：這是一個參考腳本，它包含了我們想要實現的目標處理邏輯。
+
+  目前的 `backend` 處理邏輯 (`LabelAnalysisService`)：
+
+  目前的邏輯是「多管齊下」。它會同時使用 FormatGuidedExtractor（範本座標擷取）、AzureDocumentIntelligenceExtractor（雲端 AI OCR）和 HeuristicAnalysisEngine（通用 AI
+  分析），然後將所有來源的結果合併在一起。
+
+  目標 `ref` 處理邏輯 (`processing_module.py`)：
+
+  目標邏輯是「模式切換」，根據條件二選一：
+   1. 模式 A (找到範本)：如果 PDF 檔名能對應到一個 .json 格式範本，就只使用該範本進行座標擷取。
+   2. 模式 B (未找到範本)：如果找不到對應的範本，則啟用一個純 AI 流程：
+       * 第一步：由 AI 預測出 PDF 中的關鍵頁面。
+       * 第二步：將關鍵頁面截圖，並將整個頁面圖片交給另一個 AI (如 Azure DI 或 ChatGPT) 進行分析。
+
+  ---
+
+  詳細重構指令：
+
+  請專注於修改 backend/document_analysis.py 檔案中的 LabelAnalysisService.analyse 方法。
+
+   1. 修改 `analyse` 方法的內部實作：
+       * 保留 async def analyse(self, pdf_path: Path) -> tuple[Dict[str, str], List[str]]: 的函式簽名不變。
+       * 在方法內部，首先檢查 self.format_repository 是否存在，以及它是否能為傳入的 pdf_path 找到一個對應的 FormatSpec (就像 ref/processing_module.py 中比對檔名的邏輯一樣)。
+
+   2. 實現「模式 A」邏輯：
+       * 如果成功找到了 FormatSpec，則執行「模式 A」。
+       * 在這個模式下，您應該只呼叫 self.extractor.extract(pdf_path, spec) (即 FormatGuidedExtractor) 來獲取結果。
+       * 可以選擇性地呼叫 self.document_intelligence_extractor.extract(pdf_path, spec) 作為補充，但主要以範本擷取為主。
+       * 將擷取到的欄位和處理訊息（例如 "使用格式樣板 XXX 進行處理"）準備好後返回。不要再呼叫通用的 self.analysis_engine。
+
+   3. 實現「模式 B」邏輯：
+       * 如果沒有找到 FormatSpec，則執行「模式 B」。
+       * 這是需要您發揮創意的地方。您需要模擬 ref 版本中的 process_mode_b 流程。由於 backend 中目前沒有「預測頁面」和「整頁截圖分析」的現成函式，請您：
+           * 建立兩個新的、可能是 placeholder 的 async 輔助函式，例如：
+               * _predict_relevant_pages(self, pdf_path: Path) -> List[int]：此函式應回傳一個包含頁碼的列表。在實作中，您可以先讓它簡單地回傳 [1] 或文件的前幾頁。
+               * _process_pages_with_full_page_ai(self, pdf_path: Path, pages: List[int]) -> Dict[str,
+                 str]：此函式應模擬接收頁碼後，進行整頁分析並回傳結果。在實作中，您可以讓它直接呼叫現有的 self.analysis_engine.analyse(document) 作為替代。
+           * 在 analyse 方法的「模式 B」分支中，依次呼叫這兩個新的輔助函式來完成分析流程。
+
+   4. 保持回傳格式不變：
+       * 無論是模式 A 還是模式 B，analyse 方法最終都必須回傳一個 tuple[Dict[str, str], List[str]]，其中包含擷取到的欄位字典和處理過程的訊息列表。
+
+  總結：您的任務是將 LabelAnalysisService.analyse 從一個「結果合併」的邏輯，重構成一個「條件分支」(模式 A / 模式 B) 的邏輯，使其行為與 ref/processing_module.py 的核心思想對齊。
+
+  請提供修改後的 backend/document_analysis.py 完整程式碼。
+
+  我將實際的PDF放在test_pdf目錄下，你可以取其中幾份來做測試使用
+
+  Prompt結束
+
+
+  先檢查有沒有format
+  1.如果有format檔案，那就照format中的page列表(如1,3,5..), 把該page轉成圖片
+  2.如果沒有對應的format檔案，那就先把PDF檔案拿去問chatgpt, 哪些頁面疑似有六個關鍵字訊息的，請chatgpt傳回可疑頁面數，然後將這些葉面轉成圖片
+  3.將圖片對Azure的Intelligent document去做OCR解析，再將解析結果，去問chatgpt, 得到這六個關鍵字的值

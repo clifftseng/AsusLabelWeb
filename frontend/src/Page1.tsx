@@ -47,7 +47,7 @@ interface Page1Props {
 }
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000';
-const POLL_INTERVAL_MS = 500;
+const POLL_INTERVAL_MS = 1500;
 const RECENT_PATH_KEY = 'analysis.recentPaths';
 
 const STATUS_LABELS: Record<AnalysisStatus['status'], string> = {
@@ -93,15 +93,17 @@ const Page1: React.FC<Page1Props> = ({
   const [status, setStatus] = useState<AnalysisStatus | null>(null);
   const [recentPaths, setRecentPaths] = useState<string[]>(() => parseRecentPaths());
 
-  const pollingRef = useRef<number | null>(null);
+const pollingRef = useRef<number | null>(null);
+const pollingActiveRef = useRef<boolean>(false);
   const jobPathRef = useRef<string>('');
 
-  const clearPolling = useCallback(() => {
-    if (pollingRef.current !== null) {
-      window.clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
+const clearPolling = useCallback(() => {
+  if (pollingRef.current !== null) {
+    window.clearTimeout(pollingRef.current);
+    pollingRef.current = null;
+  }
+  pollingActiveRef.current = false;
+}, []);
 
   useEffect(() => () => clearPolling(), [clearPolling]);
 
@@ -254,12 +256,25 @@ const Page1: React.FC<Page1Props> = ({
 
   const startPolling = useCallback(
     (job: string) => {
-      pollJobStatus(job);
-      pollingRef.current = window.setInterval(() => {
-        pollJobStatus(job);
-      }, POLL_INTERVAL_MS);
+      clearPolling();
+      pollingActiveRef.current = true;
+
+      const pollOnce = async () => {
+        if (!pollingActiveRef.current) {
+          return;
+        }
+        await pollJobStatus(job);
+        if (!pollingActiveRef.current) {
+          return;
+        }
+        pollingRef.current = window.setTimeout(() => {
+          void pollOnce();
+        }, POLL_INTERVAL_MS);
+      };
+
+      void pollOnce();
     },
-    [pollJobStatus],
+    [clearPolling, pollJobStatus],
   );
 
   const handleAnalyze = async () => {
@@ -350,6 +365,28 @@ const Page1: React.FC<Page1Props> = ({
   const isJobActive = status ? status.status === 'queued' || status.status === 'running' : analyzing;
   const canDownload = Boolean(status?.download_ready && jobId);
   const statusLabel = status ? STATUS_LABELS[status.status] ?? status.status.toUpperCase() : '';
+
+  const messagesWithSeparators = useMemo(() => {
+    if (!status || status.messages.length === 0) {
+      return [];
+    }
+
+    const processed: { type: 'message' | 'separator'; content: string; key: string }[] = [];
+    let lastFile = '';
+    let messageIndex = 0;
+
+    status.messages.forEach((message, index) => {
+      const match = message.match(/開始分析 (.+)/);
+      if (match && match[1] && match[1] !== lastFile) {
+        if (lastFile !== '') {
+          processed.push({ type: 'separator', content: '==============', key: `sep-${messageIndex++}` });
+        }
+        lastFile = match[1];
+      }
+      processed.push({ type: 'message', content: message, key: `msg-${index}` });
+    });
+    return processed;
+  }, [status]);
 
   return (
     <div className="container mt-5">
@@ -460,42 +497,6 @@ const Page1: React.FC<Page1Props> = ({
         </div>
       )}
 
-      {status && (
-        <div className="mb-4">
-          <h2 className="mb-3">分析進度</h2>
-          <div
-            className="progress mb-2"
-            role="progressbar"
-            aria-valuenow={Math.round(status.progress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div className="progress-bar" style={{ width: `${Math.round(status.progress)}%` }}>
-              {Math.round(status.progress)}%
-            </div>
-          </div>
-          <p className="mb-1">
-            狀態：<strong className="ms-1">{statusLabel}</strong>
-          </p>
-          <p className="mb-3">
-            處理進度：{status.processed_count} / {status.total_count}
-            {status.current_file ? `（目前處理：${status.current_file}）` : ''}
-          </p>
-          <div className="bg-light border rounded p-3" data-testid="analysis-log">
-            <h3 className="h6 mb-2">即時訊息</h3>
-            {status.messages.length > 0 ? (
-              <ul className="mb-0">
-                {status.messages.map((message, index) => (
-                  <li key={`${index}-${message}`}>{message}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted mb-0">暫無訊息</p>
-            )}
-          </div>
-        </div>
-      )}
-
       {analysisResults.length > 0 && (
         <div className="mt-5">
           <h2 className="mb-3">分析結果</h2>
@@ -533,6 +534,44 @@ const Page1: React.FC<Page1Props> = ({
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {status && (
+        <div className="mb-4">
+          <h2 className="mb-3">分析進度</h2>
+          <div
+            className="progress mb-2"
+            role="progressbar"
+            aria-valuenow={Math.round(status.progress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="progress-bar" style={{ width: `${Math.round(status.progress)}%` }}>
+              {Math.round(status.progress)}%
+            </div>
+          </div>
+          <p className="mb-1">
+            狀態：<strong className="ms-1">{statusLabel}</strong>
+          </p>
+          <p className="mb-3">
+            處理進度：{status.processed_count} / {status.total_count}
+            {status.current_file ? `（目前處理：${status.current_file}）` : ''}
+          </p>
+          <div className="bg-light border rounded p-3" data-testid="analysis-log" style={{ height: '250px', overflowY: 'auto' }}>
+            <h3 className="h6 mb-2">即時訊息</h3>
+            {messagesWithSeparators.length > 0 ? (
+              <ul className="mb-0 list-unstyled">
+                {messagesWithSeparators.map((item) => (
+                  <li key={item.key} className={item.type === 'separator' ? 'text-center fw-bold my-2' : ''}>
+                    {item.content}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted mb-0">暫無訊息</p>
+            )}
           </div>
         </div>
       )}

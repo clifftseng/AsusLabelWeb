@@ -102,6 +102,10 @@ class HeuristicAnalysisEngine:
         ],
     }
 
+    KEY_VALUE_PATTERN = re.compile(
+        r"([^:\uFF1A]+?)\s*[:\uFF1A]\s*([^:\uFF1A]+?)(?=(?:\s+[A-Za-z0-9(]|$))"
+    )
+
     def __init__(self, include_numeric_patterns: bool = True) -> None:
         self.include_numeric_patterns = include_numeric_patterns
 
@@ -109,6 +113,13 @@ class HeuristicAnalysisEngine:
         self,
         document: ExtractedDocument,
         *,
+        label_hint: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, str]:
+        return await asyncio.to_thread(self._analyse_sync, document, label_hint)
+
+    def _analyse_sync(
+        self,
+        document: ExtractedDocument,
         label_hint: Optional[Dict[str, str]] = None,
     ) -> Dict[str, str]:
         lines = self._normalise_lines(document)
@@ -145,6 +156,15 @@ class HeuristicAnalysisEngine:
             for raw_line in page.text.splitlines():
                 clean_line = re.sub(r"\s+", " ", raw_line.strip())
                 if not clean_line:
+                    continue
+                matched = False
+                for match in self.KEY_VALUE_PATTERN.finditer(clean_line):
+                    key = match.group(1).strip().lower()
+                    value = match.group(2).strip()
+                    if key and value:
+                        lines.append((key, value))
+                        matched = True
+                if matched:
                     continue
                 split = re.split(r"[:：]", clean_line, maxsplit=1)
                 if len(split) != 2:
