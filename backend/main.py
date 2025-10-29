@@ -16,11 +16,22 @@ from analysis_components import (
     PDFDocumentLoader,
     build_default_engine,
 )
+from document_analysis import (
+    AzureDocumentIntelligenceExtractor,
+    FormatGuidedExtractor,
+    FormatRepository,
+    LabelAnalysisService,
+)
+from settings import ensure_env_loaded
+
+ensure_env_loaded()
 
 try:
     from openpyxl import Workbook
+    from openpyxl.styles import PatternFill
 except ImportError:  # pragma: no cover - defensive guard for runtime
     Workbook = None  # type: ignore[assignment]
+    PatternFill = None  # type: ignore[assignment]
 
 BASE_WORKDIR = Path(
     os.getenv("ANALYSIS_JOBS_DIR", Path(__file__).resolve().parent / "job_runs")
@@ -32,7 +43,6 @@ DEFAULT_MAX_CONCURRENT_JOBS = max(1, int(os.getenv("ANALYSIS_MAX_CONCURRENT", "2
 class PDFFile(BaseModel):
     id: int
     filename: str
-    is_label: bool = False
 
 
 class ListPDFsRequest(BaseModel):
@@ -42,7 +52,6 @@ class ListPDFsRequest(BaseModel):
 class AnalyzeRequest(BaseModel):
     path: str
     files: List[PDFFile]
-    label_filename: str | None = None
 
 
 class AnalysisResult(BaseModel):
@@ -180,10 +189,45 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
         document_loader: Optional[PDFDocumentLoader] = None,
         analysis_engine: Optional[AnalysisEngine] = None,
         sleep_seconds: float = 0.05,
+        label_service: Optional[LabelAnalysisService] = None,
+        format_repository_dir: Optional[str | Path] = None,
     ) -> None:
         self.document_loader = document_loader or PDFDocumentLoader()
         self.analysis_engine = analysis_engine or build_default_engine()
         self.sleep_seconds = sleep_seconds
+        self.label_service = label_service or self._build_label_service(format_repository_dir)
+
+    def _build_label_service(self, format_repository_dir: Optional[str | Path]) -> LabelAnalysisService:
+        repository: Optional[FormatRepository] = None
+        extractor: Optional[FormatGuidedExtractor] = None
+        di_extractor: Optional[AzureDocumentIntelligenceExtractor] = None
+
+        target_dir: Optional[Path] = None
+        if format_repository_dir is not None:
+            target_dir = Path(format_repository_dir)
+        else:
+            env_dir = os.getenv("ANALYSIS_FORMAT_DIR")
+            if env_dir:
+                target_dir = Path(env_dir)
+            else:
+                target_dir = Path(__file__).resolve().parent / "formats"
+
+        if target_dir and target_dir.exists():
+            repository = FormatRepository(target_dir)
+            extractor = FormatGuidedExtractor()
+
+        try:
+            di_extractor = AzureDocumentIntelligenceExtractor()
+        except Exception:
+            di_extractor = None
+
+        return LabelAnalysisService(
+            document_loader=self.document_loader,
+            analysis_engine=self.analysis_engine,
+            format_repository=repository,
+            extractor=extractor,
+            document_intelligence_extractor=di_extractor,
+        )
 
     async def run(self, job: AnalysisJobState, callbacks: JobCallbacks) -> PipelineResult:
         source_path = Path(job.request.path)
@@ -199,8 +243,6 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
         await callbacks.set_total(len(files))
         job.job_dir.mkdir(parents=True, exist_ok=True)
 
-        label_filename = (job.request.label_filename or '').strip()
-        label_fields: Optional[Dict[str, Any]] = None
         results: List[AnalysisResult] = []
 
         for index, pdf_file in enumerate(files, start=1):
@@ -216,21 +258,19 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
             await callbacks.set_current_file(pdf_file.filename)
             await callbacks.add_message(f"開始分析 {pdf_file.filename}")
 
-            document = self.document_loader.load(file_path)
-
             try:
-                raw_fields = await self.analysis_engine.analyse(document, label_hint=label_fields)
+                raw_fields, extra_messages = await self._analyse_document(file_path)
             except Exception as exc:
                 await callbacks.add_message(f"{pdf_file.filename} 分析失敗：{exc}")
                 raise
+
+            for message in extra_messages:
+                await callbacks.add_message(message)
 
             result = self._build_result(index, pdf_file.filename, raw_fields)
             await callbacks.add_result(result)
             results.append(result)
             await callbacks.add_message(f"{pdf_file.filename} 分析完成 ({index}/{len(files)})")
-
-            if pdf_file.is_label or (label_filename and pdf_file.filename == label_filename):
-                label_fields = raw_fields
 
             if self.sleep_seconds:
                 await asyncio.sleep(self.sleep_seconds)
@@ -264,6 +304,13 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
             rated_energy_wh=as_text('rated_energy_wh'),
         )
 
+    async def _analyse_document(self, file_path: Path) -> tuple[Dict[str, Any], List[str]]:
+        if self.label_service:
+            return await self.label_service.analyse(file_path)
+        document = self.document_loader.load(file_path)
+        fields = await self.analysis_engine.analyse(document)
+        return fields, []
+
     def _write_excel(self, job_dir: Path, results: List[AnalysisResult]) -> Path:
         if Workbook is None:
             raise RuntimeError('openpyxl 未安裝，無法匯出 Excel')
@@ -281,19 +328,28 @@ class DefaultAnalysisPipeline(AnalysisPipeline):
             'Rated Energy Wh',
         ]
         worksheet.append(headers)
-        for item in results:
-            worksheet.append(
-                [
-                    item.id,
-                    item.filename,
-                    item.model_name,
-                    item.voltage,
-                    item.typ_batt_capacity_wh,
-                    item.typ_capacity_mah,
-                    item.rated_capacity_mah,
-                    item.rated_energy_wh,
-                ]
-            )
+        missing_fill = None
+        if PatternFill is not None:
+            missing_fill = PatternFill(start_color="FFFDEB95", end_color="FFFDEB95", fill_type="solid")
+        for index, item in enumerate(results, start=2):
+            row_values = [
+                item.id,
+                item.filename,
+                item.model_name,
+                item.voltage,
+                item.typ_batt_capacity_wh,
+                item.typ_capacity_mah,
+                item.rated_capacity_mah,
+                item.rated_energy_wh,
+            ]
+            for column, value in enumerate(row_values, start=1):
+                cell = worksheet.cell(row=index, column=column, value=value)
+                if (
+                    missing_fill is not None
+                    and column >= 3
+                    and (value is None or str(value).strip() == "")
+                ):
+                    cell.fill = missing_fill
         job_dir.mkdir(parents=True, exist_ok=True)
         output_path = job_dir / 'analysis_result.xlsx'
         workbook.save(output_path)
@@ -326,7 +382,7 @@ class AnalysisManager:
         async with self.lock:
             self.jobs[job_id] = job
 
-        await job.add_message("Job queued for processing")
+        await job.add_message("工作已加入佇列，等待開始。")
         job.task = asyncio.create_task(self._job_runner(job))
         return StartAnalysisResponse(job_id=job_id, status=job.status)
 

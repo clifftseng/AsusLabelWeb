@@ -48,7 +48,6 @@ class StubResult:
 @dataclass
 class StubJob:
     files: List[Dict[str, Any]]
-    label_filename: str
     status: str = "queued"
     progress: float = 0.0
     processed_count: int = 0
@@ -112,20 +111,17 @@ class StubAnalysisManager:
 
     async def start_job(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         job_id = uuid4().hex
-        files, label_filename = self._normalise_payload(payload)
-        job = StubJob(files=files, label_filename=label_filename)
+        files = self._normalise_payload(payload)
+        job = StubJob(files=files)
         job.task = asyncio.create_task(job.run())
         self.jobs[job_id] = job
         return {"job_id": job_id, "status": job.status}
 
-    def _normalise_payload(self, payload: Dict[str, Any] | AnalyzeRequest) -> tuple[list[Dict[str, Any]], str]:
+    def _normalise_payload(self, payload: Dict[str, Any] | AnalyzeRequest) -> list[Dict[str, Any]]:
         if isinstance(payload, AnalyzeRequest):
-            files = [self._serialise_pdf_file(item) for item in payload.files]
-            return files, payload.label_filename or ""
+            return [self._serialise_pdf_file(item) for item in payload.files]
         files = payload["files"]
-        label_filename = payload.get("label_filename", "")
-        normalised = [self._serialise_pdf_file(item) for item in files]
-        return normalised, label_filename
+        return [self._serialise_pdf_file(item) for item in files]
 
     @staticmethod
     def _serialise_pdf_file(item: Dict[str, Any] | PDFFile) -> Dict[str, Any]:
@@ -138,7 +134,6 @@ class StubAnalysisManager:
         return {
             "id": getattr(item, "id", 0),
             "filename": getattr(item, "filename"),
-            "is_label": getattr(item, "is_label", False),
         }
 
     async def get_status(self, job_id: str) -> Dict[str, Any]:
@@ -204,13 +199,12 @@ async def test_list_pdfs_success(sample_pdf_dir: Path):
 @pytest.mark.anyio("asyncio")
 async def test_analysis_job_lifecycle(stub_manager: StubAnalysisManager, sample_pdf_dir: Path):
     files_payload = [
-        {"id": 1, "filename": "first.pdf", "is_label": False},
-        {"id": 2, "filename": "second.pdf", "is_label": False},
+        {"id": 1, "filename": "first.pdf"},
+        {"id": 2, "filename": "second.pdf"},
     ]
     analyze_payload = {
         "path": str(sample_pdf_dir),
         "files": files_payload,
-        "label_filename": "",
     }
 
     transport = ASGITransport(app=app)
@@ -239,14 +233,13 @@ async def test_analysis_job_lifecycle(stub_manager: StubAnalysisManager, sample_
 @pytest.mark.anyio("asyncio")
 async def test_analysis_job_can_be_cancelled(stub_manager: StubAnalysisManager, sample_pdf_dir: Path):
     files_payload = [
-        {"id": 1, "filename": "first.pdf", "is_label": False},
-        {"id": 2, "filename": "second.pdf", "is_label": False},
-        {"id": 3, "filename": "label.pdf", "is_label": True},
+        {"id": 1, "filename": "first.pdf"},
+        {"id": 2, "filename": "second.pdf"},
+        {"id": 3, "filename": "third.pdf"},
     ]
     analyze_payload = {
         "path": str(sample_pdf_dir),
         "files": files_payload,
-        "label_filename": "label.pdf",
     }
 
     transport = ASGITransport(app=app)

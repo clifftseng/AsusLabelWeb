@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   ChangeEvent,
   FormEvent,
   useCallback,
@@ -12,7 +12,6 @@ import axios from 'axios';
 interface PDFFile {
   id: number;
   filename: string;
-  is_label: boolean;
 }
 
 export interface AnalysisResult {
@@ -49,6 +48,34 @@ interface Page1Props {
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000';
 const POLL_INTERVAL_MS = 500;
+const RECENT_PATH_KEY = 'analysis.recentPaths';
+
+const STATUS_LABELS: Record<AnalysisStatus['status'], string> = {
+  queued: '排隊中',
+  running: '分析中',
+  completed: '已完成',
+  cancelled: '已取消',
+  failed: '失敗',
+};
+
+const parseRecentPaths = (): string[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(RECENT_PATH_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item) => typeof item === 'string');
+    }
+  } catch (err) {
+    // ignore parsing errors and fallback to empty list
+  }
+  return [];
+};
 
 const Page1: React.FC<Page1Props> = ({
   setAnalysisResults,
@@ -59,14 +86,15 @@ const Page1: React.FC<Page1Props> = ({
   const [networkPath, setNetworkPath] = useState<string>('O:\\AI\\projects\\AsusLabel');
   const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
-  const [labelFilename, setLabelFilename] = useState<string>('');
   const [loadingList, setLoadingList] = useState<boolean>(false);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<AnalysisStatus | null>(null);
+  const [recentPaths, setRecentPaths] = useState<string[]>(() => parseRecentPaths());
 
   const pollingRef = useRef<number | null>(null);
+  const jobPathRef = useRef<string>('');
 
   const clearPolling = useCallback(() => {
     if (pollingRef.current !== null) {
@@ -75,11 +103,21 @@ const Page1: React.FC<Page1Props> = ({
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      clearPolling();
-    };
-  }, [clearPolling]);
+  useEffect(() => () => clearPolling(), [clearPolling]);
+
+  const rememberPath = useCallback((path: string) => {
+    setRecentPaths((previous) => {
+      const deduped = [path, ...previous.filter((item) => item !== path)].slice(0, 5);
+      try {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(RECENT_PATH_KEY, JSON.stringify(deduped));
+        }
+      } catch (err) {
+        // ignore storage errors
+      }
+      return deduped;
+    });
+  }, []);
 
   const resetAnalysis = useCallback(() => {
     clearPolling();
@@ -90,40 +128,68 @@ const Page1: React.FC<Page1Props> = ({
     setAnalysisPath('');
   }, [clearPolling, setAnalysisPath, setAnalysisResults]);
 
+  const fetchPdfList = useCallback(
+    async (rawPath: string) => {
+      const trimmedPath = rawPath.trim();
+      if (!trimmedPath) {
+        setError('請先輸入要掃描的來源資料夾。');
+        return;
+      }
+
+      resetAnalysis();
+      setLoadingList(true);
+      setError(null);
+      setPdfFiles([]);
+      setSelectedFiles(new Set());
+      setNetworkPath(trimmedPath);
+
+      try {
+        const response = await axios.post<PDFFile[]>(`${API_BASE_URL}/api/list-pdfs`, {
+          path: trimmedPath,
+        });
+        const files = response.data;
+        setPdfFiles(files);
+        const initialSelected = new Set(files.map((item) => item.filename));
+        setSelectedFiles(initialSelected);
+        rememberPath(trimmedPath);
+        if (files.length === 0) {
+          setError('指定路徑內沒有任何 PDF 檔案。');
+        }
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response) {
+          const message =
+            typeof err.response.data?.detail === 'string'
+              ? err.response.data.detail
+              : '無法載入 PDF 清單，請確認路徑是否存在並具有讀取權限。';
+          setError(message);
+        } else {
+          setError('無法載入 PDF 清單，請檢查網路或伺服器狀態。');
+        }
+      } finally {
+        setLoadingList(false);
+      }
+    },
+    [rememberPath, resetAnalysis],
+  );
+
   const handlePathChange = (event: ChangeEvent<HTMLInputElement>) => {
     setNetworkPath(event.target.value);
   };
 
-  const handleLoadPdfs = async (event: FormEvent) => {
-    event.preventDefault();
-    resetAnalysis();
-    setLoadingList(true);
-    setError(null);
-    setPdfFiles([]);
-    setSelectedFiles(new Set());
-    setLabelFilename('');
+  const handleLoadPdfs = useCallback(
+    async (event: FormEvent) => {
+      event.preventDefault();
+      await fetchPdfList(networkPath);
+    },
+    [fetchPdfList, networkPath],
+  );
 
-    try {
-      const response = await axios.post<PDFFile[]>(`${API_BASE_URL}/api/list-pdfs`, {
-        path: networkPath,
-      });
-      const files = response.data;
-      setPdfFiles(files);
-      const initialSelected = new Set(files.map((item) => item.filename));
-      setSelectedFiles(initialSelected);
-      const label = files.find((item) => item.is_label)?.filename ?? '';
-      setLabelFilename(label);
-    } catch (err) {
-      if (axios.isAxiosError(err) && err.response) {
-        const message = typeof err.response.data?.detail === 'string' ? err.response.data.detail : '載入 PDF 清單失敗。';
-        setError(message);
-      } else {
-        setError('載入 PDF 清單時發生未知錯誤。');
-      }
-    } finally {
-      setLoadingList(false);
-    }
-  };
+  const handleSelectRecentPath = useCallback(
+    (path: string) => {
+      void fetchPdfList(path);
+    },
+    [fetchPdfList],
+  );
 
   const toggleFileSelection = (filename: string) => {
     setSelectedFiles((previous) => {
@@ -137,41 +203,31 @@ const Page1: React.FC<Page1Props> = ({
     });
   };
 
-  const handleLabelChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setLabelFilename(event.target.value);
-  };
-
   const selectedFileList = useMemo(
     () => pdfFiles.filter((file) => selectedFiles.has(file.filename)),
     [pdfFiles, selectedFiles],
   );
 
-  const stopPollingWithStatus = useCallback(
-    (nextStatus: AnalysisStatus) => {
-      clearPolling();
-      setAnalyzing(false);
-      setStatus(nextStatus);
-    },
-    [clearPolling],
-  );
-
   const handleStatusUpdate = useCallback(
     (nextStatus: AnalysisStatus) => {
       setStatus(nextStatus);
-      setAnalyzing(nextStatus.status === 'queued' || nextStatus.status === 'running');
+      const isActive = nextStatus.status === 'queued' || nextStatus.status === 'running';
+      setAnalyzing(isActive);
+      setAnalysisResults(nextStatus.results);
 
-      if (nextStatus.status === 'completed') {
-        setAnalysisResults(nextStatus.results);
-        setAnalysisPath(networkPath);
-        clearPolling();
-      } else if (nextStatus.status === 'failed' && nextStatus.error) {
-        setError(nextStatus.error);
-        clearPolling();
-      } else if (nextStatus.status === 'cancelled') {
+      if (nextStatus.results.length > 0 || nextStatus.download_ready) {
+        setAnalysisPath(jobPathRef.current);
+      }
+
+      if (nextStatus.status === 'completed' || nextStatus.status === 'cancelled' || nextStatus.status === 'failed') {
         clearPolling();
       }
+
+      if (nextStatus.status === 'failed' && nextStatus.error) {
+        setError(nextStatus.error);
+      }
     },
-    [clearPolling, networkPath, setAnalysisPath, setAnalysisResults],
+    [clearPolling, setAnalysisPath, setAnalysisResults],
   );
 
   const pollJobStatus = useCallback(
@@ -183,10 +239,13 @@ const Page1: React.FC<Page1Props> = ({
         clearPolling();
         setAnalyzing(false);
         if (axios.isAxiosError(err) && err.response) {
-          const message = typeof err.response.data?.detail === 'string' ? err.response.data.detail : '查詢分析狀態失敗。';
+          const message =
+            typeof err.response.data?.detail === 'string'
+              ? err.response.data.detail
+              : '無法取得最新進度，請稍後再試。';
           setError(message);
         } else {
-          setError('查詢分析狀態時發生未知錯誤。');
+          setError('無法取得最新進度，請檢查網路或伺服器狀態。');
         }
       }
     },
@@ -205,40 +264,68 @@ const Page1: React.FC<Page1Props> = ({
 
   const handleAnalyze = async () => {
     if (selectedFileList.length === 0) {
-      setError('請至少選擇一個 PDF 檔案。');
+      setError('請先勾選欲分析的 PDF 檔案。');
       return;
     }
 
+    const payloadFiles = selectedFileList.map((file) => ({
+      id: file.id,
+      filename: file.filename,
+    }));
+
     setError(null);
     setAnalysisResults([]);
-    setAnalysisPath('');
-
-    const payloadFiles = selectedFileList.map((file) => ({
-      ...file,
-      is_label: file.filename === labelFilename,
-    }));
-    const labelFile = payloadFiles.find((file) => file.is_label);
+    setStatus(null);
+    jobPathRef.current = networkPath.trim();
 
     try {
       setAnalyzing(true);
-      const response = await axios.post<{ job_id: string }>(`${API_BASE_URL}/api/analyze/start`, {
-        path: networkPath,
-        files: payloadFiles,
-        label_filename: labelFile ? labelFile.filename : null,
-      });
+      const response = await axios.post<{ job_id: string; status?: AnalysisStatus['status'] }>(
+        `${API_BASE_URL}/api/analyze/start`,
+        {
+          path: jobPathRef.current,
+          files: payloadFiles,
+        },
+      );
       const nextJobId = response.data.job_id;
       setJobId(nextJobId);
+      const initialStatus: AnalysisStatus = {
+        job_id: nextJobId,
+        status: response.data.status ?? 'queued',
+        progress: 0,
+        processed_count: 0,
+        total_count: payloadFiles.length,
+        results: [],
+        download_ready: false,
+        download_path: null,
+        error: null,
+        current_file: null,
+        messages: ['工作已加入佇列，等待開始。'],
+      };
+      setStatus(initialStatus);
       startPolling(nextJobId);
     } catch (err) {
       setAnalyzing(false);
       if (axios.isAxiosError(err) && err.response) {
-        const message = typeof err.response.data?.detail === 'string' ? err.response.data.detail : '啟動分析失敗。';
+        const message =
+          typeof err.response.data?.detail === 'string'
+            ? err.response.data.detail
+            : '無法啟動分析，請稍後再試或聯絡系統管理員。';
         setError(message);
       } else {
-        setError('啟動分析時發生未知錯誤。');
+        setError('無法啟動分析，請檢查網路或伺服器狀態。');
       }
     }
   };
+
+  const stopPollingWithStatus = useCallback(
+    (nextStatus: AnalysisStatus) => {
+      clearPolling();
+      setAnalyzing(false);
+      handleStatusUpdate(nextStatus);
+    },
+    [clearPolling, handleStatusUpdate],
+  );
 
   const handleCancel = async () => {
     if (!jobId) {
@@ -249,36 +336,61 @@ const Page1: React.FC<Page1Props> = ({
       stopPollingWithStatus(response.data);
     } catch (err) {
       if (axios.isAxiosError(err) && err.response) {
-        const message = typeof err.response.data?.detail === 'string' ? err.response.data.detail : '停止分析失敗。';
+        const message =
+          typeof err.response.data?.detail === 'string'
+            ? err.response.data.detail
+            : '無法終止分析，請稍後再試。';
         setError(message);
       } else {
-        setError('停止分析時發生未知錯誤。');
+        setError('無法終止分析，請檢查網路或伺服器狀態。');
       }
     }
   };
 
   const isJobActive = status ? status.status === 'queued' || status.status === 'running' : analyzing;
-  const canDownload = status?.download_ready && jobId;
+  const canDownload = Boolean(status?.download_ready && jobId);
+  const statusLabel = status ? STATUS_LABELS[status.status] ?? status.status.toUpperCase() : '';
 
   return (
     <div className="container mt-5">
-      <h1 className="mb-4">PDF 標籤分析</h1>
+      <h1 className="mb-4">批次標籤分析工具</h1>
 
       <form onSubmit={handleLoadPdfs} className="mb-4">
-        <div className="input-group mb-3">
+        <label htmlFor="networkPath" className="form-label fw-semibold">
+          來源資料夾
+        </label>
+        <div className="input-group">
           <input
+            id="networkPath"
             type="text"
             className="form-control"
-            placeholder="請輸入來源路徑，例如 \\\\server\\share"
+            placeholder="請輸入來源資料夾，例如 \\\\server\\share"
             value={networkPath}
             onChange={handlePathChange}
             required
           />
           <button type="submit" className="btn btn-primary" disabled={loadingList}>
-            {loadingList ? '載入中...' : '載入檔案'}
+            {loadingList ? '載入中…' : '載入 PDF'}
           </button>
         </div>
       </form>
+
+      {recentPaths.length > 0 && (
+        <div className="mb-4">
+          <span className="fw-semibold me-2">最近使用：</span>
+          {recentPaths.map((path) => (
+            <button
+              key={path}
+              type="button"
+              className="btn btn-sm btn-outline-secondary me-2 mb-2"
+              onClick={() => handleSelectRecentPath(path)}
+              disabled={loadingList || isJobActive}
+            >
+              {path}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-danger" role="alert">
@@ -288,15 +400,19 @@ const Page1: React.FC<Page1Props> = ({
 
       {pdfFiles.length > 0 && (
         <div className="mb-4">
-          <h2 className="mb-3">PDF 清單</h2>
+          <h2 className="mb-3">PDF 檔案 ({pdfFiles.length})</h2>
+          <p className="text-muted">已勾選 {selectedFileList.length} 筆檔案</p>
           <div className="table-responsive">
-            <table className="table table-striped">
+            <table className="table table-striped align-middle">
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>檔名</th>
-                  <th>選擇</th>
-                  <th>作為標籤</th>
+                  <th scope="col" style={{ width: '80px' }}>
+                    #
+                  </th>
+                  <th scope="col">檔名</th>
+                  <th scope="col" style={{ width: '140px' }}>
+                    加入分析
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -313,34 +429,23 @@ const Page1: React.FC<Page1Props> = ({
                         disabled={isJobActive}
                       />
                     </td>
-                    <td>
-                      <input
-                        type="radio"
-                        name="label-file"
-                        className="form-check-input"
-                        value={file.filename}
-                        checked={labelFilename === file.filename}
-                        onChange={handleLabelChange}
-                        disabled={!selectedFiles.has(file.filename) || isJobActive}
-                      />
-                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <div className="d-flex gap-3">
+          <div className="d-flex flex-wrap gap-3">
             <button
               className="btn btn-success"
               onClick={handleAnalyze}
               disabled={isJobActive || selectedFileList.length === 0}
               type="button"
             >
-              {isJobActive ? '分析中...' : '開始分析'}
+              {isJobActive ? '分析中…' : '開始分析'}
             </button>
             {isJobActive && (
               <button className="btn btn-outline-danger" type="button" onClick={handleCancel}>
-                停止分析
+                終止分析
               </button>
             )}
             {canDownload && jobId && (
@@ -358,28 +463,36 @@ const Page1: React.FC<Page1Props> = ({
       {status && (
         <div className="mb-4">
           <h2 className="mb-3">分析進度</h2>
-          <p>
-            狀態：
-            <strong className="ms-1">{status.status.toUpperCase()}</strong>
+          <div
+            className="progress mb-2"
+            role="progressbar"
+            aria-valuenow={Math.round(status.progress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="progress-bar" style={{ width: `${Math.round(status.progress)}%` }}>
+              {Math.round(status.progress)}%
+            </div>
+          </div>
+          <p className="mb-1">
+            狀態：<strong className="ms-1">{statusLabel}</strong>
           </p>
-          <p>
-            進度：
-            <strong className="ms-1">{Math.round(status.progress)}%</strong>
+          <p className="mb-3">
+            處理進度：{status.processed_count} / {status.total_count}
+            {status.current_file ? `（目前處理：${status.current_file}）` : ''}
           </p>
-          <p>
-            已完成 {status.processed_count} / {status.total_count}{' '}
-            {status.current_file && `（處理中：${status.current_file}）`}
-          </p>
-          {status.messages.length > 0 && (
-            <div>
-              <h3 className="h5">訊息紀錄</h3>
-              <ul>
+          <div className="bg-light border rounded p-3" data-testid="analysis-log">
+            <h3 className="h6 mb-2">即時訊息</h3>
+            {status.messages.length > 0 ? (
+              <ul className="mb-0">
                 {status.messages.map((message, index) => (
                   <li key={`${index}-${message}`}>{message}</li>
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              <p className="text-muted mb-0">暫無訊息</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -388,8 +501,7 @@ const Page1: React.FC<Page1Props> = ({
           <h2 className="mb-3">分析結果</h2>
           {analysisPath && (
             <p>
-              來源路徑：
-              <strong className="ms-1">{analysisPath}</strong>
+              來源路徑：<strong className="ms-1">{analysisPath}</strong>
             </p>
           )}
           <div className="table-responsive">

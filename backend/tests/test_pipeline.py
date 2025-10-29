@@ -1,10 +1,11 @@
-import asyncio
+﻿import asyncio
 from pathlib import Path
 
 import fitz  # type: ignore[import]
 import pytest
 
 from analysis_components import HeuristicAnalysisEngine, PDFDocumentLoader
+from openpyxl import load_workbook
 from main import (
     AnalysisJobState,
     AnalyzeRequest,
@@ -49,8 +50,7 @@ async def test_default_pipeline_extracts_fields_and_creates_excel(tmp_path: Path
 
     request = AnalyzeRequest(
         path=str(sample_dir),
-        files=[PDFFile(id=1, filename="battery.pdf", is_label=False)],
-        label_filename="",
+        files=[PDFFile(id=1, filename="battery.pdf")],
     )
     job_state = AnalysisJobState(job_id="job1", request=request, job_dir=tmp_path / "job")
     pipeline = DefaultAnalysisPipeline(
@@ -71,41 +71,22 @@ async def test_default_pipeline_extracts_fields_and_creates_excel(tmp_path: Path
 
 
 @pytest.mark.anyio
-async def test_pipeline_reuses_label_fields_when_missing(tmp_path: Path):
+async def test_pipeline_handles_missing_fields_without_label(tmp_path: Path):
     sample_dir = tmp_path / "inputs"
     sample_dir.mkdir()
-    label_pdf = sample_dir / "label.pdf"
-    product_pdf = sample_dir / "product.pdf"
+    pdf_path = sample_dir / "product.pdf"
 
     _create_pdf(
-        label_pdf,
-        [
-            "Model Name: LABEL-01",
-            "Nominal Voltage: 11.1V",
-            "Typ Batt Capacity Wh: 50Wh",
-            "Typ Capacity mAh: 4400mAh",
-            "Rated Capacity mAh: 4200mAh",
-            "Rated Energy Wh: 48Wh",
-        ],
-    )
-
-    _create_pdf(
-        product_pdf,
+        pdf_path,
         [
             "Model Name: PROD-77",
             "Nominal Voltage: 11.1V",
-            "Typ Batt Capacity Wh: 50Wh",
-            "Typ Capacity mAh: 4400mAh",
         ],
     )
 
     request = AnalyzeRequest(
         path=str(sample_dir),
-        files=[
-            PDFFile(id=1, filename="label.pdf", is_label=True),
-            PDFFile(id=2, filename="product.pdf", is_label=False),
-        ],
-        label_filename="label.pdf",
+        files=[PDFFile(id=1, filename="product.pdf")],
     )
 
     job_state = AnalysisJobState(job_id="job2", request=request, job_dir=tmp_path / "job")
@@ -118,13 +99,17 @@ async def test_pipeline_reuses_label_fields_when_missing(tmp_path: Path):
 
     await pipeline.run(job_state, callbacks)
 
-    assert len(job_state.results) == 2
-    label_result, product_result = job_state.results
-    assert label_result.model_name == "LABEL-01"
-    assert product_result.model_name == "PROD-77"
-    # Missing fields on product should be populated from label inference
-    assert product_result.rated_energy_wh == "48Wh"
-    assert product_result.rated_capacity_mah == "4200mAh"
+    assert len(job_state.results) == 1
+    result = job_state.results[0]
+    assert result.model_name == "PROD-77"
+    # 保持缺漏欄位為空字串，避免產生隨機值
+    assert result.typ_batt_capacity_wh == ""
+    assert result.typ_capacity_mah == ""
+
+    excel_path = job_state.job_dir / "analysis_result.xlsx"
+    workbook = load_workbook(excel_path)
+    worksheet = workbook.active
+    assert worksheet["E2"].fill.start_color.rgb == "FFFDEB95"
 
 
 @pytest.mark.anyio
@@ -142,8 +127,7 @@ async def test_pipeline_honours_cancellation(tmp_path: Path):
 
     request = AnalyzeRequest(
         path=str(sample_dir),
-        files=[PDFFile(id=1, filename="cancel.pdf", is_label=False)],
-        label_filename="",
+        files=[PDFFile(id=1, filename="cancel.pdf")],
     )
     job_state = AnalysisJobState(job_id="job3", request=request, job_dir=tmp_path / "job")
     job_state.cancel_event.set()
@@ -160,3 +144,46 @@ async def test_pipeline_honours_cancellation(tmp_path: Path):
     assert result.download_path is None
     assert job_state.results == []
     assert job_state.progress == pytest.approx(0.0)
+
+
+@pytest.mark.anyio
+async def test_pipeline_respects_label_analysis_service(tmp_path: Path):
+    sample_dir = tmp_path / "pdfs"
+    sample_dir.mkdir()
+    pdf_path = sample_dir / "battery.pdf"
+    _create_pdf(pdf_path, ["dummy"])
+
+    request = AnalyzeRequest(
+        path=str(sample_dir),
+        files=[PDFFile(id=1, filename="battery.pdf")],
+    )
+    job_state = AnalysisJobState(job_id="job4", request=request, job_dir=tmp_path / "job")
+
+    class StubLabelService:
+        def __init__(self) -> None:
+            self.calls: list[Path] = []
+
+        async def analyse(self, pdf: Path):
+            self.calls.append(pdf)
+            return (
+                {
+                    "model_name": "from_stub",
+                    "voltage": "42V",
+                },
+                ["stub message"],
+            )
+
+    stub_service = StubLabelService()
+    pipeline = DefaultAnalysisPipeline(
+        document_loader=PDFDocumentLoader(max_pages=1),
+        analysis_engine=HeuristicAnalysisEngine(),
+        sleep_seconds=0.0,
+        label_service=stub_service,  # type: ignore[arg-type]
+    )
+    callbacks = JobCallbacks(job_state)
+
+    await pipeline.run(job_state, callbacks)
+
+    assert stub_service.calls == [pdf_path]
+    assert job_state.results[0].model_name == "from_stub"
+    assert any("stub message" in message for message in job_state.messages)

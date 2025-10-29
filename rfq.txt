@@ -9,26 +9,21 @@
 我的需求是:
 
 1.請優化上面我的流程與前端介面。
-2.現在已經有個雛形(截圖如asis.png)，程式碼分別在frontend, backend資料夾，流程可以跑，但分析還沒有做好。
-3.將後端完整的實作，分析的實作，我之前有做好GUI app, 是在ref資料夾下，你可以參考該資料夾下的guiapp.py，以及主要的處理邏輯processing_module.py，
-主要根據VLLM方式將所需關鍵字分析出來，你可以參考或優化，可以複製但不要再引用ref的檔案(日後會將ref移除)
-4.相關的設定，存放到.env中了
+2.將後端完整的實作，分析的實作，我之前有做好GUI app, 是在ref資料夾下，你可以參考該資料夾下的guiapp.py，以及主要的處理邏輯processing_module.py，
+主要根據VLLM方式將所需關鍵字分析出來，整體邏輯你可以參考gui_app.py與processing_module.py與相關檔案的互動，必須參考或優化，可以複製內容但不要再引用ref的檔案(因為日後會將ref移除)
+3.相關的設定，存放到.env中了，使用Azure AOAI與Document Intelligent的連線方式已經定義在.env, 變數如下，安全關係我把值都先移除，後續會補上:
+# Azure AOAI
+AZURE_OPENAI_ENDPOINT=""
+AZURE_OPENAI_API_KEY=""
+AZURE_OPENAI_DEPLOYMENT=""
 
-5.每一個功能都要嚴格按照TDD方式執行，並要做好單元測試、功能測試、整合測試、系統測試等等
+# Azure Document Intelligence
+DOCUMENT_INTELLIGENCE_ENDPOINT=""
+DOCUMENT_INTELLIGENCE_KEY=""
+
+4.每一個功能都要嚴格按照TDD方式執行，並要做好單元測試、功能測試、整合測試、系統測試等等
 
 請列出你的執行計畫，估計要拆成幾個sprint?
 請先列出來跟我討論後，再決定怎麼執行。
-請以完整輸出模式執行 'npm run build && npm test'，包含所有 stdout 與錯誤訊息，不要只顯示 summary
 
-
-- Sprint 1 規劃
-functional/integration/system 的測試目錄與範例），列出技術風險與待辦清單。
-- Sprint 2（後端分析核心與測試，1.5 週）：實作檔案分析流程（含關鍵字抽取、並行/佇列控制、中斷處理）、撰寫對應的 unit 與 integration 測試、串接 VLLM 模組（以
-processing_module 為參考但不直接引用）、提供 API 規格文件、以 mock 驗證前端可用。
-- Sprint 3（前端互動優化與系統整合，1.5 週）：重構前端 UI/UX（流程控制、進度條、結果列表、下載 xlsx）、與後端 API 整合並撰寫功能/系統測試（含 E2E 模擬多檔案情境與中斷/恢
-復）、優化錯誤處理與重試機制、最終執行 npm run build && npm test 並提供完整 stdout/stderr 紀錄。
-
-- 隨 Sprint 推進，維持 TDD：每項功能先寫測試再實作，確保 unit→integration→system→E2E 全覆蓋。
-- 在進入實作前會先整理詳細的任務分解與測試需求；若有設計稿／UI 參考再同步確認。
-- 各 Sprint 收尾時提供成果 demo、測試報告與後續 backlog。
 

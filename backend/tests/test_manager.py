@@ -61,7 +61,7 @@ class ConcurrencyTracker:
 
 
 def _analysis_payload(path: str = ".") -> AnalyzeRequest:
-    return AnalyzeRequest(path=path, files=[PDFFile(id=1, filename="fake.pdf", is_label=False)], label_filename=None)
+    return AnalyzeRequest(path=path, files=[PDFFile(id=1, filename="fake.pdf")])
 
 
 async def _wait_for_all(manager: AnalysisManager, job_ids: List[str]) -> None:
