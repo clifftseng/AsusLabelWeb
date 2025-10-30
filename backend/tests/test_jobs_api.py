@@ -84,6 +84,23 @@ async def test_cancel_job_endpoint(client, source_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_job_forbidden_for_different_owner(client, source_dir: Path) -> None:
+    async_client, _ = client
+    job_response = await async_client.post(
+        "/api/jobs/",
+        json={
+            "owner_id": "alice",
+            "source_path": str(source_dir),
+            "files": [{"filename": "doc1.pdf"}],
+        },
+    )
+    job_id = job_response.json()["job_id"]
+
+    response = await async_client.get(f"/api/jobs/{job_id}", params={"owner_id": "bob"})
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_download_endpoint_returns_file(client, source_dir: Path) -> None:
     async_client, app = client
     create_response = await async_client.post(

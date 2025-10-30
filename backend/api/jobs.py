@@ -152,6 +152,7 @@ def list_jobs(
 @router.get("/{job_id}", response_model=JobDetailResponse)
 def get_job(
     job_id: str,
+    owner_id: Optional[str] = None,
     repository: JobRepository = Depends(get_repository),
 ) -> JobDetailResponse:
     try:

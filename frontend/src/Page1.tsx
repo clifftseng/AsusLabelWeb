@@ -108,6 +108,14 @@ const formatTimestamp = (value: string) => {
   }
 };
 
+const manifestFilename = (entry: Record<string, unknown>): string => {
+  const candidate =
+    (entry as { filename?: unknown }).filename ??
+    (entry as { name?: unknown }).name ??
+    (entry as { source_path?: unknown }).source_path;
+  return typeof candidate === 'string' ? candidate : '';
+};
+
 const Page1: React.FC<Page1Props> = ({
   setAnalysisResults,
   analysisResults,
@@ -334,6 +342,7 @@ const Page1: React.FC<Page1Props> = ({
       setSelectedJobId(response.data.job_id);
       setJobDetail(null);
       setJobEvents([]);
+      setSelectedFiles(new Set());
       fetchJobs();
     } catch (err) {
       setAnalysisError('建立分析工作失敗，請稍後再試。');
@@ -363,10 +372,10 @@ const Page1: React.FC<Page1Props> = ({
     : null;
 
   const statusLabel = selectedJob ? STATUS_LABELS[selectedJob.status] : '';
-  const isJobRunning =
-    selectedJob && !FINAL_STATUSES.includes(selectedJob.status) ? selectedJob.job_id : null;
+  const isJobRunning = Boolean(selectedJob && !FINAL_STATUSES.includes(selectedJob.status));
 
   const jobResults = jobDetail?.output_manifest ?? analysisResults;
+  const jobFiles = jobDetail?.input_manifest ?? [];
 
   return (
     <div className="container py-4">
@@ -495,7 +504,6 @@ const Page1: React.FC<Page1Props> = ({
                               className="form-check-input"
                               checked={selectedFiles.has(file.filename)}
                               onChange={() => toggleFileSelection(file.filename)}
-                              disabled={Boolean(isJobRunning)}
                             />
                           </td>
                         </tr>
@@ -505,38 +513,71 @@ const Page1: React.FC<Page1Props> = ({
                 </div>
               )}
 
-              <div className="d-flex gap-3">
+              <div className="d-flex gap-3 flex-wrap">
                 <button
                   className="btn btn-success"
                   type="button"
                   onClick={handleAnalyze}
                   disabled={submittingJob || selectedFiles.size === 0}
                 >
-                  {submittingJob ? '建立中…' : '建立分析工作'}
+                  {submittingJob ? '建立中，請稍候' : '建立分析工作'}
                 </button>
-                {selectedJobId && isJobRunning && (
-                  <button
-                    className="btn btn-outline-danger"
-                    type="button"
-                    onClick={() => handleCancel(selectedJobId)}
-                  >
-                    終止工作
-                  </button>
-                )}
-                {downloadUrl && (
-                  <a className="btn btn-outline-primary" href={downloadUrl}>
-                    下載結果
-                  </a>
-                )}
               </div>
               {analysisError && <p className="text-danger mt-3 mb-0">{analysisError}</p>}
             </div>
           </div>
 
-          {selectedJob && (
+          {jobDetail && jobFiles.length > 0 && (
             <div className="card mb-4">
               <div className="card-header">
+                <strong>工作檔案列表</strong>
+              </div>
+              <div className="card-body">
+                <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  <table className="table table-striped table-sm">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ width: '60px' }}>#</th>
+                        <th>檔名</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jobFiles.map((entry, index) => (
+                        <tr key={`${manifestFilename(entry)}-${index}`}>
+                          <td>{index + 1}</td>
+                          <td>{manifestFilename(entry)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {selectedJob && (
+            <div className="card mb-4">
+              <div className="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <strong>工作詳情</strong>
+                {(downloadUrl || isJobRunning) && (
+                  <div className="d-flex flex-wrap gap-2">
+                    {downloadUrl && (
+                      <a className="btn btn-outline-primary btn-sm" href={downloadUrl}>
+                        下載結果
+                      </a>
+                    )}
+                    {isJobRunning && (
+                      <button
+                        className="btn btn-outline-danger btn-sm"
+                        type="button"
+                        onClick={() => handleCancel(selectedJob.job_id)}
+                      >
+                        終止工作
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="card-body">
                 <div className="row mb-3">

@@ -110,3 +110,259 @@ Request headers:
     'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
     'Ocp-Apim-Subscription-Key': 'REDACTED'
 No body was attached to the request
+2025-10-30 08:42:15,278 - backend.main - INFO - Started 2 worker(s)
+2025-10-30 08:42:34,360 - backend.document_analysis - INFO - Starting analysis for PDF: 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-30 08:42:34,361 - backend.document_analysis - INFO - [Mode B] No matching format for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf, using AI workflow
+2025-10-30 08:42:34,700 - backend.document_analysis - INFO - [Mode B] No keywords found, defaulting to first 1 pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-30 08:42:34,700 - backend.document_analysis - INFO - [Mode B] Falling back to heuristic pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf: [1]
+2025-10-30 08:42:36,262 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document:analyze?stringIndexType=unicodeCodePoint&api-version=2023-07-31'
+Request method: 'POST'
+Request headers:
+    'Content-Length': '2224380'
+    'Content-Type': 'application/octet-stream'
+    'Accept': 'application/json'
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+A body is sent with the request
+2025-10-30 08:42:38,863 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 202
+Response headers:
+    'Content-Length': '0'
+    'Operation-Location': 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+    'x-envoy-upstream-service-time': '335'
+    'apim-request-id': '4be9f57a-8448-42ae-821a-7902ac1ff758'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:38 GMT'
+2025-10-30 08:42:38,865 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 08:42:39,098 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '6'
+    'x-envoy-upstream-service-time': '32'
+    'apim-request-id': 'f6882f08-e4e5-416c-a9b4-fc7152be9e45'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:38 GMT'
+2025-10-30 08:42:45,100 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 08:42:45,326 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '1'
+    'x-envoy-upstream-service-time': '23'
+    'apim-request-id': 'd123160b-81b9-4bd4-8d77-6799b1111b0e'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:45 GMT'
+2025-10-30 08:42:46,328 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 08:42:46,551 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '1'
+    'x-envoy-upstream-service-time': '22'
+    'apim-request-id': 'ba204b06-c172-41b0-8247-12f6a42c8789'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:46 GMT'
+2025-10-30 08:42:47,552 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 08:42:47,824 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '1'
+    'x-envoy-upstream-service-time': '25'
+    'apim-request-id': '439616a8-057d-4b95-a2aa-4a4cefca2c21'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:47 GMT'
+2025-10-30 08:42:48,826 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 08:42:49,051 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '1'
+    'x-envoy-upstream-service-time': '24'
+    'apim-request-id': 'd7d87ad5-2f7b-4aef-a435-08184d5598be'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:48 GMT'
+2025-10-30 08:42:50,053 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/4be9f57a-8448-42ae-821a-7902ac1ff758?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '54642461-b529-11f0-a6be-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 08:42:50,279 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '1'
+    'x-envoy-upstream-service-time': '27'
+    'apim-request-id': '60642e9a-3dc4-4a3c-92aa-993ed91a0e77'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 00:42:49 GMT'
+2025-10-30 08:47:38,287 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-30 08:47:38,290 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/4a537d0d1efd4f839ab08bb43f6d3c82?owner_id=alice "HTTP/1.1 200 OK"
+2025-10-30 08:47:38,345 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-30 08:47:38,351 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/f728a7137566467fa15420ca45972a36/cancel?owner_id=alice "HTTP/1.1 200 OK"
+2025-10-30 08:47:38,352 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/f728a7137566467fa15420ca45972a36?owner_id=alice "HTTP/1.1 200 OK"
+2025-10-30 08:47:38,408 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-30 08:47:38,410 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/e05df0e82ede41d9821cc917a8fe5b41?owner_id=bob "HTTP/1.1 403 Forbidden"
+2025-10-30 08:47:38,466 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-30 08:47:38,474 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/a320d038d1b147ecab451d77880f4ab4/download?owner_id=alice "HTTP/1.1 200 OK"
+2025-10-30 09:34:15,607 - backend.main - INFO - Started 2 worker(s)
+2025-10-30 10:01:34,355 - backend.main - INFO - Started 2 worker(s)
+2025-10-30 10:03:14,969 - backend.document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-30 10:03:14,969 - backend.document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf, using AI workflow
+2025-10-30 10:03:16,858 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-30 10:03:16,867 - backend.document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-30 10:03:17,086 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document:analyze?stringIndexType=unicodeCodePoint&api-version=2023-07-31'
+Request method: 'POST'
+Request headers:
+    'Content-Length': '494125'
+    'Content-Type': 'application/octet-stream'
+    'Accept': 'application/json'
+    'x-ms-client-request-id': '99bf584e-b534-11f0-9105-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+A body is sent with the request
+2025-10-30 10:03:18,991 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 202
+Response headers:
+    'Content-Length': '0'
+    'Operation-Location': 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/e2a37ada-e89e-4ab5-bc42-81b2bbf59354?api-version=2023-07-31'
+    'x-envoy-upstream-service-time': '97'
+    'apim-request-id': 'e2a37ada-e89e-4ab5-bc42-81b2bbf59354'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 02:03:18 GMT'
+2025-10-30 10:03:18,994 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/e2a37ada-e89e-4ab5-bc42-81b2bbf59354?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '99bf584e-b534-11f0-9105-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 10:03:19,238 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '6'
+    'x-envoy-upstream-service-time': '30'
+    'apim-request-id': '0833b0af-fc00-4cef-b932-3153627e82bc'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 02:03:18 GMT'
+2025-10-30 10:03:25,240 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/e2a37ada-e89e-4ab5-bc42-81b2bbf59354?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': '99bf584e-b534-11f0-9105-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 10:03:26,604 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '62371'
+    'Content-Type': 'application/json; charset=utf-8'
+    'x-envoy-upstream-service-time': '771'
+    'apim-request-id': 'cabdfd4a-76ce-4189-a112-967a9e0f91c9'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 02:03:25 GMT'
+2025-10-30 10:03:26,678 - backend.document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-30 10:03:28,510 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-30 10:03:28,512 - backend.document_analysis - INFO - [Mode B] Completed analysis for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf with 1 populated fields
+2025-10-30 10:03:28,592 - backend.document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-30 10:03:28,593 - backend.document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf, using AI workflow
+2025-10-30 10:03:28,598 - backend.document_analysis - INFO - [Mode B] No keywords found, defaulting to first 2 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-30 10:03:28,598 - backend.document_analysis - INFO - [Mode B] Falling back to heuristic pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf: [1, 2]
+2025-10-30 10:03:29,287 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document:analyze?stringIndexType=unicodeCodePoint&api-version=2023-07-31'
+Request method: 'POST'
+Request headers:
+    'Content-Length': '1229450'
+    'Content-Type': 'application/octet-stream'
+    'Accept': 'application/json'
+    'x-ms-client-request-id': 'a104feed-b534-11f0-a50a-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+A body is sent with the request
+2025-10-30 10:03:29,895 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 202
+Response headers:
+    'Content-Length': '0'
+    'Operation-Location': 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/273c1ab7-c5f7-48b3-b80d-c0d5044d884c?api-version=2023-07-31'
+    'x-envoy-upstream-service-time': '147'
+    'apim-request-id': '273c1ab7-c5f7-48b3-b80d-c0d5044d884c'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 02:03:29 GMT'
+2025-10-30 10:03:29,898 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/273c1ab7-c5f7-48b3-b80d-c0d5044d884c?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': 'a104feed-b534-11f0-a50a-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 10:03:30,271 - azure.core.pipeline.policies.http_logging_policy - INFO - Response status: 200
+Response headers:
+    'Content-Length': '106'
+    'Content-Type': 'application/json; charset=utf-8'
+    'retry-after': '6'
+    'x-envoy-upstream-service-time': '173'
+    'apim-request-id': '23210a05-f283-44ad-9b75-10c2021d9901'
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload'
+    'x-content-type-options': 'nosniff'
+    'x-ms-region': 'East US 2'
+    'Date': 'Thu, 30 Oct 2025 02:03:29 GMT'
+2025-10-30 10:03:36,273 - azure.core.pipeline.policies.http_logging_policy - INFO - Request URL: 'https://document-ai-ak.cognitiveservices.azure.com/formrecognizer/documentModels/prebuilt-document/analyzeResults/273c1ab7-c5f7-48b3-b80d-c0d5044d884c?api-version=2023-07-31'
+Request method: 'GET'
+Request headers:
+    'x-ms-client-request-id': 'a104feed-b534-11f0-a50a-107c6157f60c'
+    'User-Agent': 'azsdk-python-ai-formrecognizer/3.3.2 Python/3.12.9 (Windows-11-10.0.26100-SP0)'
+    'Ocp-Apim-Subscription-Key': 'REDACTED'
+No body was attached to the request
+2025-10-30 10:04:35,546 - backend.main - INFO - Started 2 worker(s)

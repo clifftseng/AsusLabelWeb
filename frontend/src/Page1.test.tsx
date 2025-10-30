@@ -34,17 +34,19 @@ class MockEventSource {
   }
 }
 
-const renderComponent = () => {
+const renderComponent = async () => {
   const setAnalysisResults = jest.fn<void, [AnalysisResult[]]>();
   const setAnalysisPath = jest.fn<void, [string]>();
-  render(
-    <Page1
-      analysisResults={[]}
-      setAnalysisResults={setAnalysisResults}
-      setAnalysisPath={setAnalysisPath}
-      analysisPath=""
-    />,
-  );
+  await act(async () => {
+    render(
+      <Page1
+        analysisResults={[]}
+        setAnalysisResults={setAnalysisResults}
+        setAnalysisPath={setAnalysisPath}
+        analysisPath=""
+      />,
+    );
+  });
   return { setAnalysisResults, setAnalysisPath };
 };
 
@@ -162,7 +164,7 @@ test('creates a job and streams events to show results', async () => {
     throw new Error(`Unexpected POST ${url}`);
   });
 
-  const { setAnalysisResults, setAnalysisPath } = renderComponent();
+  const { setAnalysisResults, setAnalysisPath } = await renderComponent();
 
   // owner id input
   const ownerInput = await screen.findByPlaceholderText('請輸入使用者代號');
@@ -182,6 +184,7 @@ test('creates a job and streams events to show results', async () => {
   await act(async () => {
     fireEvent.click(createButton);
   });
+  expect(createButton).toBeDisabled();
 
   expect(mockedAxios.post).toHaveBeenCalledWith(
     `${process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000'}/api/jobs`,
@@ -265,7 +268,7 @@ test('cancels a running job', async () => {
     return { data: runningDetail };
   });
 
-  renderComponent();
+  await renderComponent();
 
   const ownerInput = await screen.findByPlaceholderText('請輸入使用者代號');
   fireEvent.change(ownerInput, { target: { value: 'tester' } });
