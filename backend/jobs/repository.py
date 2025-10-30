@@ -45,6 +45,11 @@ def _parse_dt(value: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(value)
 
 
+def _default_display_name(timestamp: datetime) -> str:
+    local_dt = timestamp.astimezone()
+    return local_dt.strftime("%m/%d %H:%M")
+
+
 class JobRepository:
     """Persistence layer for job queue state built on top of SQLite."""
 
@@ -91,6 +96,7 @@ class JobRepository:
                     owner_id TEXT NOT NULL,
                     status TEXT NOT NULL,
                     source_path TEXT NOT NULL,
+                    display_name TEXT,
                     input_manifest TEXT NOT NULL,
                     output_manifest TEXT NOT NULL,
                     parameters TEXT NOT NULL,
@@ -132,17 +138,26 @@ class JobRepository:
                     ON job_events (job_id, created_at);
                 """
             )
+            try:
+                self._conn.execute("ALTER TABLE jobs ADD COLUMN display_name TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     def enqueue_job(self, *, owner_id: str, payload: dict[str, Any]) -> JobRecord:
         job_id = uuid4().hex
-        now = _utcnow().isoformat()
+        dt_now = _utcnow()
+        now = dt_now.isoformat()
         files = payload.get("files") or []
         total_files = int(payload.get("total_files") or len(files))
+        display_name = payload.get("display_name")
+        if not display_name:
+            display_name = _default_display_name(dt_now)
         record = {
             "job_id": job_id,
             "owner_id": owner_id,
             "status": JobStatus.QUEUED.value,
             "source_path": payload.get("source_path", ""),
+            "display_name": display_name,
             "input_manifest": _serialize_json(files),
             "output_manifest": _serialize_json([]),
             "parameters": _serialize_json(payload.get("parameters") or {}),
@@ -168,7 +183,7 @@ class JobRepository:
             cursor.execute(
                 """
                 INSERT INTO jobs (
-                    job_id, owner_id, status, source_path,
+                    job_id, owner_id, status, source_path, display_name,
                     input_manifest, output_manifest, parameters,
                     total_files, processed_files, progress,
                     current_file, download_path, error,
@@ -177,7 +192,7 @@ class JobRepository:
                     started_at, completed_at, cancelled_at, failed_at
                 )
                 VALUES (
-                    :job_id, :owner_id, :status, :source_path,
+                    :job_id, :owner_id, :status, :source_path, :display_name,
                     :input_manifest, :output_manifest, :parameters,
                     :total_files, :processed_files, :progress,
                     :current_file, :download_path, :error,
@@ -193,7 +208,7 @@ class JobRepository:
                 job_id=job_id,
                 level="info",
                 message="Job queued",
-                metadata={"total_files": total_files},
+                metadata={"total_files": total_files, "display_name": display_name},
             )
 
         return self.get_job(job_id)
@@ -311,9 +326,44 @@ class JobRepository:
                         "total": total,
                         "current_file": current_file,
                     },
-                )
+        )
 
         return self.get_job(job_id)
+
+    def update_display_name(self, job_id: str, display_name: str) -> JobRecord:
+        now = _utcnow().isoformat()
+        with self._transaction() as cursor:
+            updated = cursor.execute(
+                """
+                UPDATE jobs
+                   SET display_name = :display_name,
+                       updated_at = :now
+                 WHERE job_id = :job_id
+                """,
+                {"display_name": display_name, "now": now, "job_id": job_id},
+            )
+            if updated.rowcount != 1:
+                raise KeyError(f"Job {job_id} not found")
+            self._append_event(
+                cursor,
+                job_id=job_id,
+                level="info",
+                message=f"Job renamed to {display_name}",
+                metadata={"display_name": display_name},
+            )
+
+        return self.get_job(job_id)
+
+    def delete_jobs(self, job_ids: list[str]) -> None:
+        ids = [job_id for job_id in job_ids if job_id]
+        if not ids:
+            return
+        placeholders = ",".join("?" for _ in ids)
+        with self._transaction() as cursor:
+            cursor.execute(
+                f"DELETE FROM jobs WHERE job_id IN ({placeholders})",
+                ids,
+            )
 
     def complete_job(
         self,
@@ -576,11 +626,14 @@ class JobRepository:
         )
 
     def _row_to_job(self, row: sqlite3.Row) -> JobRecord:
+        created_at = _parse_dt(row["created_at"])
+        display_name = row["display_name"] or _default_display_name(created_at or _utcnow())
         return JobRecord(
             job_id=row["job_id"],
             owner_id=row["owner_id"],
             status=JobStatus(row["status"]),
             source_path=row["source_path"],
+            display_name=display_name,
             input_manifest=_deserialize_json(row["input_manifest"], []),
             output_manifest=_deserialize_json(row["output_manifest"], []),
             parameters=_deserialize_json(row["parameters"], {}),
@@ -594,7 +647,7 @@ class JobRepository:
             locked_by=row["locked_by"],
             locked_at=_parse_dt(row["locked_at"]),
             heartbeat_at=_parse_dt(row["heartbeat_at"]),
-            created_at=_parse_dt(row["created_at"]),
+            created_at=created_at,
             updated_at=_parse_dt(row["updated_at"]),
             started_at=_parse_dt(row["started_at"]),
             completed_at=_parse_dt(row["completed_at"]),

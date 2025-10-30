@@ -24,6 +24,7 @@ class JobService:
         source_path: str,
         files: Iterable[Mapping[str, Any]],
         parameters: Optional[Mapping[str, Any]] = None,
+        display_name: Optional[str] = None,
     ) -> JobRecord:
         source_dir = Path(source_path)
         manifest: list[dict[str, Any]] = []
@@ -47,6 +48,7 @@ class JobService:
             "files": manifest,
             "parameters": dict(parameters or {}),
             "total_files": len(manifest),
+            "display_name": display_name,
         }
         job = self.repository.enqueue_job(owner_id=owner_id, payload=payload)
         job_dir = self.job_directory(job.job_id)
@@ -60,6 +62,19 @@ class JobService:
         job_dir.mkdir(parents=True, exist_ok=True)
         return job_dir
 
+    def rename_job(self, job_id: str, display_name: str) -> JobRecord:
+        job = self.repository.update_display_name(job_id, display_name)
+        self.refresh_status_snapshot(job)
+        return job
+
+    def delete_jobs(self, job_ids: Iterable[str]) -> None:
+        ids = [job_id for job_id in job_ids if job_id]
+        if not ids:
+            return
+        self.repository.delete_jobs(ids)
+        for job_id in ids:
+            self._remove_job_directory(job_id)
+
     def cleanup_inputs(self, job_id: str) -> None:
         job_dir = self.job_directory(job_id)
         input_dir = job_dir / "input"
@@ -71,6 +86,10 @@ class JobService:
     def refresh_status_snapshot(self, job: JobRecord) -> None:
         job_dir = self.job_directory(job.job_id)
         self._write_status_snapshot(job_dir, job)
+
+    def _remove_job_directory(self, job_id: str) -> None:
+        job_dir = self.storage_root / job_id
+        shutil.rmtree(job_dir, ignore_errors=True)
 
     def _initialise_directories(self, job_dir: Path) -> None:
         for sub in ("input", "working", "output", "logs"):

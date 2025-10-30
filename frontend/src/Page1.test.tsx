@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import Page1, { AnalysisResult } from './Page1';
@@ -8,12 +8,14 @@ jest.mock('axios', () => ({
   default: {
     get: jest.fn(),
     post: jest.fn(),
+    patch: jest.fn(),
   },
 }));
 
 type AxiosMock = {
   get: jest.Mock;
   post: jest.Mock;
+  patch: jest.Mock;
 };
 
 const mockedAxios = axios as unknown as AxiosMock;
@@ -72,6 +74,7 @@ test('creates a job and streams events to show results', async () => {
 
   const jobSummary = {
     job_id: 'job-123456',
+    display_name: '測試工作',
     owner_id: 'tester',
     source_path: 'C:/data',
     status: 'queued' as const,
@@ -95,7 +98,7 @@ test('creates a job and streams events to show results', async () => {
   const jobDetailCompleted = {
     ...jobSummary,
     status: 'completed' as const,
-    progress: 100,
+    progress: 1,
     processed_files: 2,
     download_path: '/api/jobs/job-123456/download',
     events: [
@@ -167,7 +170,7 @@ test('creates a job and streams events to show results', async () => {
   const { setAnalysisResults, setAnalysisPath } = await renderComponent();
 
   // owner id input
-  const ownerInput = await screen.findByPlaceholderText('請輸入使用者代號');
+  const ownerInput = await screen.findByPlaceholderText('請輸入使用者 ID');
   fireEvent.change(ownerInput, { target: { value: 'tester' } });
 
   const pathInput = screen.getByPlaceholderText('請輸入來源資料夾');
@@ -228,10 +231,11 @@ test('cancels a running job', async () => {
 
   const runningJob = {
     job_id: 'job-running',
+    display_name: '執行中的工作',
     owner_id: 'tester',
     source_path: 'C:/data',
     status: 'running' as const,
-    progress: 10,
+    progress: 0.1,
     total_files: 1,
     processed_files: 0,
     current_file: 'doc.pdf',
@@ -270,12 +274,12 @@ test('cancels a running job', async () => {
 
   await renderComponent();
 
-  const ownerInput = await screen.findByPlaceholderText('請輸入使用者代號');
+  const ownerInput = await screen.findByPlaceholderText('請輸入使用者 ID');
   fireEvent.change(ownerInput, { target: { value: 'tester' } });
 
-  await waitFor(() => expect(screen.getByText('job-running'.slice(0, 8))).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText('執行中的工作')).toBeInTheDocument());
 
-  const jobButton = screen.getByText('job-running'.slice(0, 8)).closest('button');
+  const jobButton = screen.getByText('執行中的工作').closest('button');
   expect(jobButton).not.toBeNull();
   fireEvent.click(jobButton as HTMLButtonElement);
 

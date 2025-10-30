@@ -1,4 +1,4 @@
-import React, {
+﻿import React, {
   ChangeEvent,
   FormEvent,
   useCallback,
@@ -30,6 +30,7 @@ interface JobSummary {
   owner_id: string;
   source_path: string;
   status: JobStatus;
+  display_name: string;
   progress: number;
   total_files: number;
   processed_files: number;
@@ -54,6 +55,10 @@ interface JobDetail extends JobSummary {
   events: JobEvent[];
 }
 
+interface BatchDeleteResponse {
+  deleted: number;
+}
+
 type JobStatus = 'queued' | 'running' | 'retrying' | 'completed' | 'failed' | 'cancelled';
 
 interface Page1Props {
@@ -66,9 +71,9 @@ interface Page1Props {
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000';
 const POLL_JOBS_INTERVAL_MS = 5000;
 const STATUS_LABELS: Record<JobStatus, string> = {
-  queued: '排隊中',
+  queued: '等待中',
   retrying: '重試中',
-  running: '分析中',
+  running: '執行中',
   completed: '已完成',
   cancelled: '已取消',
   failed: '失敗',
@@ -108,6 +113,21 @@ const formatTimestamp = (value: string) => {
   }
 };
 
+const formatJobTimestamp = (value: string) => {
+  try {
+    const date = new Date(value);
+    return new Intl.DateTimeFormat('zh-TW', {
+      hour12: false,
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(date);
+  } catch (err) {
+    return value;
+  }
+};
+
 const manifestFilename = (entry: Record<string, unknown>): string => {
   const candidate =
     (entry as { filename?: unknown }).filename ??
@@ -138,6 +158,11 @@ const Page1: React.FC<Page1Props> = ({
   const [submittingJob, setSubmittingJob] = useState<boolean>(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [nameFilter, setNameFilter] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<string>('');
+  const [isRenaming, setIsRenaming] = useState<boolean>(false);
+  const [renameValue, setRenameValue] = useState<string>('');
 
   const jobsPollRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -282,6 +307,28 @@ const Page1: React.FC<Page1Props> = ({
     }
   }, [jobDetail, closeEventSource]);
 
+  useEffect(() => {
+    setSelectedJobIds((previous) => {
+      const next = new Set<string>();
+      jobList.forEach((job) => {
+        if (previous.has(job.job_id)) {
+          next.add(job.job_id);
+        }
+      });
+      return next;
+    });
+  }, [jobList]);
+
+  useEffect(() => {
+    if (selectedJob) {
+      setRenameValue(selectedJob.display_name);
+      setIsRenaming(false);
+    } else {
+      setRenameValue('');
+      setIsRenaming(false);
+    }
+  }, [selectedJob]);
+
   const handleOwnerChange = (event: ChangeEvent<HTMLInputElement>) => {
     setOwnerId(event.target.value);
     persistOwnerId(event.target.value);
@@ -302,7 +349,7 @@ const Page1: React.FC<Page1Props> = ({
       rememberPath(networkPath);
       setAnalysisError(null);
     } catch (err) {
-      setAnalysisError('無法取得 PDF 列表，請確認路徑或稍後再試。');
+      setAnalysisError('載入 PDF 清單時發生錯誤，請確認路徑是否正確。');
     } finally {
       setLoadingPdfs(false);
     }
@@ -327,7 +374,7 @@ const Page1: React.FC<Page1Props> = ({
 
   const handleAnalyze = async () => {
     if (selectedFiles.size === 0) {
-      setAnalysisError('請至少選擇一個檔案。');
+      setAnalysisError('請選擇要分析的檔案。');
       return;
     }
     setSubmittingJob(true);
@@ -361,7 +408,7 @@ const Page1: React.FC<Page1Props> = ({
       fetchJobDetail(jobId);
       fetchJobs();
     } catch (err) {
-      setAnalysisError('取消工作失敗，請稍後再試。');
+      setAnalysisError('終止工作失敗，請稍後再試。');
     }
   };
 
@@ -377,53 +424,259 @@ const Page1: React.FC<Page1Props> = ({
   const jobResults = jobDetail?.output_manifest ?? analysisResults;
   const jobFiles = jobDetail?.input_manifest ?? [];
 
+  const filteredJobs = useMemo(() => {
+    const nameTerm = nameFilter.trim().toLowerCase();
+    return jobList.filter((job) => {
+      const matchesName = nameTerm ? job.display_name.toLowerCase().includes(nameTerm) : true;
+      if (!matchesName) {
+        return false;
+      }
+      if (!dateFilter) {
+        return true;
+      }
+      try {
+        const jobDate = new Date(job.created_at);
+        if (Number.isNaN(jobDate.getTime())) {
+          return false;
+        }
+        const isoDate = jobDate.toISOString().slice(0, 10);
+        return isoDate === dateFilter;
+      } catch {
+        return false;
+      }
+    });
+  }, [jobList, nameFilter, dateFilter]);
+
+  const allJobsSelected =
+    filteredJobs.length > 0 && filteredJobs.every((job) => selectedJobIds.has(job.job_id));
+  const hasSelectedJobs = selectedJobIds.size > 0;
+
+  const toggleJobSelection = useCallback((jobId: string) => {
+    setSelectedJobIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedJobIds((previous) => {
+      const next = new Set(previous);
+      const everySelected = filteredJobs.every((job) => next.has(job.job_id));
+      if (everySelected) {
+        filteredJobs.forEach((job) => next.delete(job.job_id));
+      } else {
+        filteredJobs.forEach((job) => next.add(job.job_id));
+      }
+      return next;
+    });
+  }, [filteredJobs]);
+
+  const handleDeleteSelected = useCallback(async () => {
+    const ids = Array.from(selectedJobIds);
+    if (ids.length === 0) {
+      return;
+    }
+    try {
+      await axios.post<BatchDeleteResponse>(`${API_BASE_URL}/api/jobs/batch-delete`, {
+        job_ids: ids,
+        owner_id: ownerIdSafe,
+      });
+      setJobsError(null);
+      setJobList((previous) => previous.filter((job) => !ids.includes(job.job_id)));
+      setSelectedJobIds(new Set());
+      if (selectedJobId && ids.includes(selectedJobId)) {
+        setSelectedJobId(null);
+        setJobDetail(null);
+        setJobEvents([]);
+        setAnalysisResults([]);
+        setAnalysisPath('');
+      }
+    } catch (err) {
+      setJobsError('刪除工作失敗，請稍後再試。');
+    }
+  }, [
+    ownerIdSafe,
+    selectedJobId,
+    selectedJobIds,
+    setAnalysisPath,
+    setAnalysisResults,
+  ]);
+
+  const handleRenameClick = useCallback(() => {
+    setIsRenaming(true);
+  }, []);
+
+  const handleRenameCancel = useCallback(() => {
+    setIsRenaming(false);
+    setRenameValue(selectedJob?.display_name ?? '');
+  }, [selectedJob]);
+
+  const handleRenameSubmit = useCallback(async () => {
+    if (!selectedJobId) {
+      return;
+    }
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      setRenameValue(selectedJob?.display_name ?? '');
+      setIsRenaming(false);
+      return;
+    }
+    try {
+      const response = await axios.patch<JobSummary>(
+        `${API_BASE_URL}/api/jobs/${selectedJobId}`,
+        { display_name: trimmed },
+        { params: { owner_id: ownerIdSafe } },
+      );
+      setJobList((previous) =>
+        previous.map((job) =>
+          job.job_id === selectedJobId
+            ? {
+                ...job,
+                display_name: response.data.display_name,
+                updated_at: response.data.updated_at,
+              }
+            : job,
+        ),
+      );
+      setJobDetail((previous) =>
+        previous && previous.job_id === selectedJobId
+          ? {
+              ...previous,
+              display_name: response.data.display_name,
+              updated_at: response.data.updated_at,
+            }
+          : previous,
+      );
+      setRenameValue(response.data.display_name);
+      setAnalysisError(null);
+      setIsRenaming(false);
+    } catch (err) {
+      setAnalysisError('更新工作名稱失敗，請稍後再試。');
+    }
+  }, [ownerIdSafe, renameValue, selectedJob, selectedJobId]);
+
   return (
     <div className="container py-4">
-      <h1 className="mb-4">ASUS Label 分析作業</h1>
+      <h1 className="mb-4">ASUS Label 分析平台</h1>
 
       <div className="row">
         <div className="col-lg-3 mb-4">
           <div className="card h-100">
             <div className="card-header">
-              <strong>使用者 / 工作列表</strong>
+              <strong>工作列表</strong>
             </div>
             <div className="card-body d-flex flex-column" style={{ minHeight: '550px' }}>
               <div className="mb-3">
                 <label htmlFor="ownerId" className="form-label">
-                  使用者代號
+                  使用者 ID
                 </label>
                 <input
                   id="ownerId"
                   className="form-control"
                   value={ownerId}
                   onChange={handleOwnerChange}
-                  placeholder="請輸入使用者代號"
+                  placeholder="請輸入使用者 ID"
                 />
+              </div>
+
+              <div className="d-flex flex-column gap-2 mb-3">
+                <input
+                  className="form-control"
+                  placeholder="搜尋工作名稱"
+                  value={nameFilter}
+                  onChange={(event) => setNameFilter(event.target.value)}
+                />
+                <div className="d-flex gap-2">
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={dateFilter}
+                    onChange={(event) => setDateFilter(event.target.value)}
+                  />
+                  <button
+                    className="btn btn-outline-secondary"
+                    type="button"
+                    onClick={() => {
+                      setNameFilter('');
+                      setDateFilter('');
+                    }}
+                  >
+                    清除
+                  </button>
+                </div>
+              </div>
+
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="selectAllJobs"
+                    checked={allJobsSelected}
+                    onChange={toggleSelectAll}
+                    disabled={filteredJobs.length === 0}
+                  />
+                  <label className="form-check-label" htmlFor="selectAllJobs">
+                    全選
+                  </label>
+                </div>
+                <button
+                  className="btn btn-outline-danger btn-sm"
+                  type="button"
+                  onClick={handleDeleteSelected}
+                  disabled={!hasSelectedJobs}
+                >
+                  刪除已選
+                </button>
               </div>
 
               <div className="flex-grow-1 overflow-auto border rounded p-2 bg-light">
                 {jobsError && <p className="text-danger mb-2">{jobsError}</p>}
-                {jobList.length === 0 ? (
-                  <p className="text-muted">目前沒有工作記錄。</p>
+                {filteredJobs.length === 0 ? (
+                  <p className="text-muted">目前沒有符合條件的工作。</p>
                 ) : (
                   <ul className="list-unstyled mb-0">
-                    {jobList.map((job) => (
+                    {filteredJobs.map((job) => (
                       <li key={job.job_id} className="mb-2">
-                        <button
-                          type="button"
-                          className={`btn btn-sm w-100 text-start ${
-                            selectedJobId === job.job_id ? 'btn-primary' : 'btn-outline-primary'
-                          }`}
-                          onClick={() => setSelectedJobId(job.job_id)}
-                        >
-                          <div className="d-flex justify-content-between">
-                            <span className="fw-semibold">{job.job_id.slice(0, 8)}</span>
-                            <span>{STATUS_LABELS[job.status]}</span>
+                        <div className="d-flex align-items-start gap-2">
+                          <div className="form-check mt-1">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={selectedJobIds.has(job.job_id)}
+                              onChange={() => toggleJobSelection(job.job_id)}
+                            />
                           </div>
-                          <div className="small text-muted">
-                            {Math.round(job.progress * 100) / 100}% · {job.total_files} 檔
-                          </div>
-                        </button>
+                          <button
+                            type="button"
+                            className={`btn btn-sm w-100 text-start ${
+                              selectedJobId === job.job_id ? 'btn-primary' : 'btn-outline-primary'
+                            }`}
+                            onClick={() => setSelectedJobId(job.job_id)}
+                          >
+                            <div className="d-flex justify-content-between">
+                              <div className="me-2">
+                                <div className="fw-semibold text-truncate">
+                                  {job.display_name || formatJobTimestamp(job.created_at)}
+                                </div>
+                                <div className="small text-muted">
+                                  {formatJobTimestamp(job.created_at)}
+                                </div>
+                              </div>
+                              <div className="text-end">
+                                <div>{STATUS_LABELS[job.status]}</div>
+                                <div className="small text-muted">
+                                  {Math.round(job.progress * 100)}% · {job.total_files} 檔
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -580,6 +833,43 @@ const Page1: React.FC<Page1Props> = ({
                 )}
               </div>
               <div className="card-body">
+                <div className="mb-3">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="fw-semibold">工作名稱</div>
+                    {!isRenaming && (
+                      <button
+                        className="btn btn-link btn-sm p-0"
+                        type="button"
+                        onClick={handleRenameClick}
+                      >
+                        重新命名
+                      </button>
+                    )}
+                  </div>
+                  {isRenaming ? (
+                    <div className="d-flex flex-wrap gap-2">
+                      <input
+                        className="form-control form-control-sm"
+                        value={renameValue}
+                        onChange={(event) => setRenameValue(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            handleRenameSubmit();
+                          }
+                        }}
+                      />
+                      <button className="btn btn-primary btn-sm" type="button" onClick={handleRenameSubmit}>
+                        儲存
+                      </button>
+                      <button className="btn btn-outline-secondary btn-sm" type="button" onClick={handleRenameCancel}>
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <div>{selectedJob.display_name || formatJobTimestamp(selectedJob.created_at)}</div>
+                  )}
+                </div>
                 <div className="row mb-3">
                   <div className="col-md-4">
                     <div className="fw-semibold">Job ID</div>
@@ -590,16 +880,22 @@ const Page1: React.FC<Page1Props> = ({
                     <div>{statusLabel}</div>
                   </div>
                   <div className="col-md-4">
-                    <div className="fw-semibold">進度</div>
+                    <div className="fw-semibold">處理進度</div>
                     <div>
-                      {selectedJob.processed_files}/{selectedJob.total_files} ·{' '}
-                      {Math.round(selectedJob.progress)}%
+                      {selectedJob.processed_files}/{selectedJob.total_files} 檔 ·{' '}
+                      {Math.round(selectedJob.progress * 100)}%
                     </div>
                   </div>
                 </div>
-                <div className="mb-3">
-                  <div className="fw-semibold">來源路徑</div>
-                  <div>{selectedJob.source_path}</div>
+                <div className="row mb-3">
+                  <div className="col-md-4">
+                    <div className="fw-semibold">建立時間</div>
+                    <div>{formatJobTimestamp(selectedJob.created_at)}</div>
+                  </div>
+                  <div className="col-md-8">
+                    <div className="fw-semibold">來源路徑</div>
+                    <div className="text-break">{selectedJob.source_path}</div>
+                  </div>
                 </div>
                 {selectedJob.error && (
                   <div className="alert alert-warning" role="alert">
@@ -653,7 +949,7 @@ const Page1: React.FC<Page1Props> = ({
           {jobEvents.length > 0 && (
             <div className="card mb-4">
               <div className="card-header">
-                <strong>處理紀錄</strong>
+                <strong>工作事件</strong>
               </div>
               <div className="card-body bg-light" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 <ul className="list-unstyled mb-0">

@@ -25,6 +25,7 @@ class JobRecord:
     owner_id: str
     status: JobStatus
     source_path: str
+    display_name: str
     input_manifest: list[dict[str, Any]]
     output_manifest: list[dict[str, Any]]
     parameters: dict[str, Any]

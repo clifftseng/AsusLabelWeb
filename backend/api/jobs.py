@@ -43,6 +43,20 @@ class CreateJobRequest(BaseModel):
     source_path: str
     files: List[JobFileModel]
     parameters: dict[str, Any] = Field(default_factory=dict)
+    display_name: Optional[str] = None
+
+
+class UpdateJobRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=100)
+
+
+class BatchDeleteRequest(BaseModel):
+    job_ids: List[str]
+    owner_id: Optional[str] = None
+
+
+class BatchDeleteResponse(BaseModel):
+    deleted: int
 
 
 class CancelJobRequest(BaseModel):
@@ -71,6 +85,7 @@ class JobSummary(BaseModel):
     owner_id: str
     status: JobStatus
     source_path: str
+    display_name: str
     progress: float
     total_files: int
     processed_files: int
@@ -87,6 +102,7 @@ class JobSummary(BaseModel):
             owner_id=job.owner_id,
             status=job.status,
             source_path=job.source_path,
+            display_name=job.display_name,
             progress=job.progress,
             total_files=job.total_files,
             processed_files=job.processed_files,
@@ -129,6 +145,7 @@ def create_job(
         source_path=request.source_path,
         files=[file.model_dump() for file in request.files],
         parameters=request.parameters,
+        display_name=request.display_name,
     )
     return JobSummary.from_domain(job)
 
@@ -164,6 +181,23 @@ def get_job(
     return JobDetailResponse.from_domain(job, events)
 
 
+@router.patch("/{job_id}", response_model=JobSummary)
+def update_job(
+    job_id: str,
+    request: UpdateJobRequest,
+    repository: JobRepository = Depends(get_repository),
+    service: JobService = Depends(get_service),
+    owner_id: Optional[str] = None,
+) -> JobSummary:
+    try:
+        job = repository.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _ensure_owner(job, owner_id)
+    updated = service.rename_job(job_id, request.display_name)
+    return JobSummary.from_domain(updated)
+
+
 @router.post("/{job_id}/cancel", response_model=JobSummary)
 def cancel_job(
     job_id: str,
@@ -179,6 +213,27 @@ def cancel_job(
     _ensure_owner(job, owner_id)
     service.refresh_status_snapshot(job)
     return JobSummary.from_domain(job)
+
+
+
+
+@router.post("/batch-delete", response_model=BatchDeleteResponse)
+def delete_jobs(
+    request: BatchDeleteRequest,
+    repository: JobRepository = Depends(get_repository),
+    service: JobService = Depends(get_service),
+) -> BatchDeleteResponse:
+    job_ids = list(dict.fromkeys(request.job_ids))
+    if not job_ids:
+        return BatchDeleteResponse(deleted=0)
+    for job_id in job_ids:
+        try:
+            job = repository.get_job(job_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _ensure_owner(job, request.owner_id)
+    service.delete_jobs(job_ids)
+    return BatchDeleteResponse(deleted=len(job_ids))
 
 
 @router.get("/{job_id}/download")

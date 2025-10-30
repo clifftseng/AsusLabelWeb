@@ -139,3 +139,63 @@ async def test_download_endpoint_returns_file(client, source_dir: Path) -> None:
         "application/vnd.openxmlformats-officedocument",
     )
     assert response.content
+
+
+@pytest.mark.asyncio
+async def test_update_job_display_name(client, source_dir: Path) -> None:
+    async_client, _ = client
+    create_response = await async_client.post(
+        "/api/jobs/",
+        json={
+            "owner_id": "alice",
+            "source_path": str(source_dir),
+            "files": [{"filename": "doc1.pdf"}],
+        },
+    )
+    job_id = create_response.json()["job_id"]
+
+    rename = await async_client.patch(
+        f"/api/jobs/{job_id}",
+        params={"owner_id": "alice"},
+        json={"display_name": "重要任務"},
+    )
+    assert rename.status_code == 200
+    assert rename.json()["display_name"] == "重要任務"
+
+    detail = await async_client.get(
+        f"/api/jobs/{job_id}",
+        params={"owner_id": "alice"},
+    )
+    assert detail.status_code == 200
+    assert detail.json()["display_name"] == "重要任務"
+
+
+@pytest.mark.asyncio
+async def test_batch_delete_jobs(client, source_dir: Path) -> None:
+    async_client, _ = client
+    job_ids: list[str] = []
+    for name in ("first.pdf", "second.pdf"):
+        (source_dir / name).write_text("pdf", encoding="utf-8")
+        response = await async_client.post(
+            "/api/jobs/",
+            json={
+                "owner_id": "alice",
+                "source_path": str(source_dir),
+                "files": [{"filename": name}],
+            },
+        )
+        job_ids.append(response.json()["job_id"])
+
+    delete_response = await async_client.post(
+        "/api/jobs/batch-delete",
+        json={"job_ids": job_ids, "owner_id": "alice"},
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["deleted"] == 2
+
+    for job_id in job_ids:
+        detail = await async_client.get(
+            f"/api/jobs/{job_id}",
+            params={"owner_id": "alice"},
+        )
+        assert detail.status_code == 404
