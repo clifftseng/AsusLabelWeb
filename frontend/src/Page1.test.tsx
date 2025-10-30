@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import Page1, { AnalysisResult } from './Page1';
@@ -6,107 +6,169 @@ import Page1, { AnalysisResult } from './Page1';
 jest.mock('axios', () => ({
   __esModule: true,
   default: {
-    post: jest.fn(),
     get: jest.fn(),
+    post: jest.fn(),
   },
 }));
 
 type AxiosMock = {
-  post: jest.Mock;
   get: jest.Mock;
+  post: jest.Mock;
 };
 
 const mockedAxios = axios as unknown as AxiosMock;
 
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+  url: string;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(url: string) {
+    this.url = url;
+    MockEventSource.instances.push(this);
+  }
+
+  close() {
+    // noop
+  }
+}
+
 const renderComponent = () => {
   const setAnalysisResults = jest.fn<void, [AnalysisResult[]]>();
   const setAnalysisPath = jest.fn<void, [string]>();
-  const props = {
-    setAnalysisResults,
-    analysisResults: [] as AnalysisResult[],
-    setAnalysisPath,
-    analysisPath: '',
-  };
-  render(<Page1 {...props} />);
+  render(
+    <Page1
+      analysisResults={[]}
+      setAnalysisResults={setAnalysisResults}
+      setAnalysisPath={setAnalysisPath}
+      analysisPath=""
+    />,
+  );
   return { setAnalysisResults, setAnalysisPath };
 };
 
 beforeEach(() => {
-  localStorage.clear();
+  jest.clearAllMocks();
+  MockEventSource.instances = [];
+  (global as unknown as { EventSource: typeof EventSource }).EventSource =
+    MockEventSource as unknown as typeof EventSource;
+  window.localStorage.clear();
 });
 
 afterEach(() => {
-  jest.clearAllMocks();
   jest.useRealTimers();
 });
 
-test('starts analysis and renders results when job completes', async () => {
+test('creates a job and streams events to show results', async () => {
   jest.useFakeTimers();
 
-  const samplePdfs = [
-    { id: 1, filename: 'doc.pdf' },
-    { id: 2, filename: 'label.pdf' },
+  const pdfList = [
+    { id: 1, filename: 'doc1.pdf' },
+    { id: 2, filename: 'doc2.pdf' },
   ];
 
-  mockedAxios.post.mockResolvedValueOnce({ data: samplePdfs });
-  mockedAxios.post.mockResolvedValueOnce({ data: { job_id: 'job123', status: 'queued' } });
-
-  const runningStatus = {
-    job_id: 'job123',
-    status: 'running' as const,
-    progress: 40,
-    processed_count: 1,
-    total_count: 2,
-    results: [
-      {
-        id: 1,
-        filename: 'doc.pdf',
-        model_name: 'Model_1',
-        voltage: '12V',
-        typ_batt_capacity_wh: '50Wh',
-        typ_capacity_mah: '4000mAh',
-        rated_capacity_mah: '3800mAh',
-        rated_energy_wh: '48Wh',
-      },
-    ],
-    download_ready: false,
-    download_path: null,
+  const jobSummary = {
+    job_id: 'job-123456',
+    owner_id: 'tester',
+    source_path: 'C:/data',
+    status: 'queued' as const,
+    progress: 0,
+    total_files: 2,
+    processed_files: 0,
+    current_file: null,
     error: null,
-    current_file: 'doc.pdf',
-    messages: ['doc.pdf 分析完成 (1/2)'],
+    download_path: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
   };
 
-  const completedStatus = {
-    ...runningStatus,
+  const jobDetailQueued = {
+    ...jobSummary,
+    events: [],
+    input_manifest: [{ filename: 'doc1.pdf' }, { filename: 'doc2.pdf' }],
+    output_manifest: [],
+  };
+
+  const jobDetailCompleted = {
+    ...jobSummary,
     status: 'completed' as const,
     progress: 100,
-    processed_count: 2,
-    results: [
-      ...runningStatus.results,
+    processed_files: 2,
+    download_path: '/api/jobs/job-123456/download',
+    events: [
       {
-        id: 2,
-        filename: 'label.pdf',
-        model_name: 'Model_2',
-        voltage: '13V',
-        typ_batt_capacity_wh: '55Wh',
-        typ_capacity_mah: '4100mAh',
-        rated_capacity_mah: '3900mAh',
-        rated_energy_wh: '52Wh',
+        event_id: 1,
+        created_at: new Date().toISOString(),
+        level: 'info',
+        message: 'Job queued',
+        metadata: {},
+      },
+      {
+        event_id: 2,
+        created_at: new Date().toISOString(),
+        level: 'info',
+        message: 'Job completed',
+        metadata: {},
       },
     ],
-    download_ready: true,
-    download_path: '/fake/path.xlsx',
-    current_file: null,
-    messages: [...runningStatus.messages, '已匯出分析結果 analysis_result.xlsx'],
+    input_manifest: [{ filename: 'doc1.pdf' }, { filename: 'doc2.pdf' }],
+    output_manifest: [
+      {
+        id: 1,
+        filename: 'doc1.pdf',
+        model_name: 'Model A',
+        voltage: '12V',
+        typ_batt_capacity_wh: '50',
+        typ_capacity_mah: '4000',
+        rated_capacity_mah: '3900',
+        rated_energy_wh: '48',
+      },
+      {
+        id: 2,
+        filename: 'doc2.pdf',
+        model_name: 'Model B',
+        voltage: '11V',
+        typ_batt_capacity_wh: '45',
+        typ_capacity_mah: '3800',
+        rated_capacity_mah: '3600',
+        rated_energy_wh: '42',
+      },
+    ],
   };
 
-  mockedAxios.get
-    .mockResolvedValueOnce({ data: runningStatus })
-    .mockResolvedValueOnce({ data: completedStatus });
+  let detailCallCount = 0;
+
+  mockedAxios.get.mockImplementation(async (url: string) => {
+    if (url.endsWith('/api/jobs')) {
+      return { data: [jobSummary] };
+    }
+    if (url.endsWith('/api/jobs/job-123456')) {
+      detailCallCount += 1;
+      return detailCallCount === 1
+        ? { data: jobDetailQueued }
+        : { data: jobDetailCompleted };
+    }
+    throw new Error(`Unexpected GET ${url}`);
+  });
+
+  mockedAxios.post.mockImplementation(async (url: string) => {
+    if (url.endsWith('/api/list-pdfs')) {
+      return { data: pdfList };
+    }
+    if (url.endsWith('/api/jobs')) {
+      return { data: jobSummary };
+    }
+    throw new Error(`Unexpected POST ${url}`);
+  });
 
   const { setAnalysisResults, setAnalysisPath } = renderComponent();
 
-  const pathInput = screen.getByPlaceholderText(/請輸入來源資料夾/);
+  // owner id input
+  const ownerInput = await screen.findByPlaceholderText('請輸入使用者代號');
+  fireEvent.change(ownerInput, { target: { value: 'tester' } });
+
+  const pathInput = screen.getByPlaceholderText('請輸入來源資料夾');
   fireEvent.change(pathInput, { target: { value: 'C:/data' } });
 
   const loadButton = screen.getByRole('button', { name: '載入 PDF' });
@@ -114,99 +176,113 @@ test('starts analysis and renders results when job completes', async () => {
     fireEvent.click(loadButton);
   });
 
-  await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledTimes(1));
-  expect(await screen.findByRole('heading', { name: 'PDF 檔案 (2)' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'C:/data' })).toBeInTheDocument();
+  expect(await screen.findByText('doc1.pdf')).toBeInTheDocument();
 
-  const analyzeButton = await screen.findByRole('button', { name: '開始分析' });
+  const createButton = screen.getByRole('button', { name: '建立分析工作' });
   await act(async () => {
-    fireEvent.click(analyzeButton);
+    fireEvent.click(createButton);
   });
 
-  await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(mockedAxios.get).toHaveBeenCalledTimes(1));
+  expect(mockedAxios.post).toHaveBeenCalledWith(
+    `${process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000'}/api/jobs`,
+    expect.objectContaining({
+      owner_id: 'tester',
+      source_path: 'C:/data',
+    }),
+  );
+
+  await waitFor(() => expect(detailCallCount).toBeGreaterThan(0));
+  await waitFor(() => expect(MockEventSource.instances.length).toBe(1));
+
+  const eventSource = MockEventSource.instances[0];
+  expect(eventSource.url).toContain('/api/jobs/job-123456/events');
+  expect(eventSource.url).toContain('owner_id=tester');
 
   await act(async () => {
-    jest.advanceTimersByTime(600);
+    eventSource.onmessage?.({
+      data: JSON.stringify({
+        event_id: 2,
+        created_at: new Date().toISOString(),
+        level: 'info',
+        message: 'Job completed',
+        metadata: {},
+      }),
+    } as MessageEvent);
+    jest.runOnlyPendingTimers();
   });
 
-  await waitFor(() => expect(mockedAxios.get).toHaveBeenCalledTimes(2));
-
-  await waitFor(() => expect(setAnalysisResults).toHaveBeenCalledWith(runningStatus.results));
-  await waitFor(() => expect(setAnalysisResults).toHaveBeenCalledWith(completedStatus.results));
-  expect(setAnalysisPath).toHaveBeenCalledWith('C:/data');
-
-  expect(screen.getByText('100%')).toBeInTheDocument();
-  expect(screen.getByText('doc.pdf 分析完成 (1/2)')).toBeInTheDocument();
-  expect(screen.getByText('已匯出分析結果 analysis_result.xlsx')).toBeInTheDocument();
-  expect(screen.getByTestId('analysis-log')).toHaveTextContent('doc.pdf 分析完成 (1/2)');
-  expect(localStorage.getItem('analysis.recentPaths')).toContain('C:/data');
+  await waitFor(() => expect(setAnalysisResults).toHaveBeenCalled());
+  expect(setAnalysisResults).toHaveBeenLastCalledWith(jobDetailCompleted.output_manifest);
+  expect(setAnalysisPath).toHaveBeenLastCalledWith('C:/data');
+  expect(await screen.findByText('Job completed')).toBeInTheDocument();
+  expect(screen.getByText('Model A')).toBeInTheDocument();
+  const downloadLink = screen.getByRole('link', { name: '下載結果' }) as HTMLAnchorElement;
+  expect(downloadLink.href).toContain('owner_id=tester');
 });
 
-test('allows user to cancel an ongoing analysis job', async () => {
+test('cancels a running job', async () => {
   jest.useFakeTimers();
 
-  const samplePdfs = [{ id: 1, filename: 'doc.pdf' }];
-  mockedAxios.post.mockResolvedValueOnce({ data: samplePdfs });
-  mockedAxios.post.mockResolvedValueOnce({ data: { job_id: 'job123', status: 'queued' } });
-  mockedAxios.post.mockResolvedValueOnce({
-    data: {
-      job_id: 'job123',
-      status: 'cancelled',
-      progress: 0,
-      processed_count: 0,
-      total_count: 1,
-      results: [],
-      download_ready: false,
-      download_path: null,
-      error: null,
-      current_file: null,
-      messages: ['使用者已中止分析流程'],
-    },
+  const runningJob = {
+    job_id: 'job-running',
+    owner_id: 'tester',
+    source_path: 'C:/data',
+    status: 'running' as const,
+    progress: 10,
+    total_files: 1,
+    processed_files: 0,
+    current_file: 'doc.pdf',
+    error: null,
+    download_path: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const runningDetail = {
+    ...runningJob,
+    events: [],
+    input_manifest: [{ filename: 'doc.pdf' }],
+    output_manifest: [],
+  };
+
+  mockedAxios.get.mockImplementation(async (url: string) => {
+    if (url.endsWith('/api/jobs')) {
+      return { data: [runningJob] };
+    }
+    if (url.endsWith('/api/jobs/job-running')) {
+      return { data: runningDetail };
+    }
+    throw new Error(`Unexpected GET ${url}`);
   });
 
-  const runningStatus = {
-    job_id: 'job123',
-    status: 'running' as const,
-    progress: 20,
-    processed_count: 0,
-    total_count: 1,
-    results: [] as AnalysisResult[],
-    download_ready: false,
-    download_path: null,
-    error: null,
-    current_file: 'doc.pdf',
-    messages: [],
-  };
-  mockedAxios.get.mockResolvedValue({ data: runningStatus });
+  mockedAxios.post.mockImplementation(async (url: string) => {
+    if (url.endsWith('/cancel')) {
+      return { data: runningDetail };
+    }
+    if (url.endsWith('/api/list-pdfs')) {
+      return { data: [] };
+    }
+    return { data: runningDetail };
+  });
 
   renderComponent();
 
-  const pathInput = screen.getByPlaceholderText(/請輸入來源資料夾/);
-  fireEvent.change(pathInput, { target: { value: 'C:/data' } });
+  const ownerInput = await screen.findByPlaceholderText('請輸入使用者代號');
+  fireEvent.change(ownerInput, { target: { value: 'tester' } });
 
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: '載入 PDF' }));
-  });
-  await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.getByText('job-running'.slice(0, 8))).toBeInTheDocument());
 
-  const analyzeButton = await screen.findByRole('button', { name: '開始分析' });
-  await act(async () => {
-    fireEvent.click(analyzeButton);
-  });
+  const jobButton = screen.getByText('job-running'.slice(0, 8)).closest('button');
+  expect(jobButton).not.toBeNull();
+  fireEvent.click(jobButton as HTMLButtonElement);
 
-  await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledTimes(2));
-  await waitFor(() => expect(mockedAxios.get).toHaveBeenCalled());
-
-  await act(async () => {
-    jest.advanceTimersByTime(600);
-  });
-
-  const cancelButton = await screen.findByRole('button', { name: '終止分析' });
+  const cancelButton = await screen.findByRole('button', { name: '終止工作' });
   await act(async () => {
     fireEvent.click(cancelButton);
   });
 
-  await waitFor(() => expect(mockedAxios.post).toHaveBeenCalledTimes(3));
-  expect(mockedAxios.post.mock.calls[2][0]).toContain('/api/analyze/stop');
+  const cancelCall = mockedAxios.post.mock.calls.find(([url]) =>
+    url.endsWith('/api/jobs/job-running/cancel'),
+  );
+  expect(cancelCall).toBeDefined();
 });

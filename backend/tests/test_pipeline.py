@@ -1,189 +1,74 @@
-﻿import asyncio
-from pathlib import Path
+from __future__ import annotations
 
-import fitz  # type: ignore[import]
+from pathlib import Path
+from typing import Tuple
+
 import pytest
 
-from analysis_components import HeuristicAnalysisEngine, PDFDocumentLoader
-from openpyxl import load_workbook
-from main import (
-    AnalysisJobState,
-    AnalyzeRequest,
-    DefaultAnalysisPipeline,
-    JobCallbacks,
-    PDFFile,
-)
+from backend.jobs.worker import ProgressReporter
+from backend.jobs.repository import JobRepository
+from backend.jobs.service import JobService
+from backend.processors.analysis import AnalysisJobProcessor
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
+class ConstantLabelService:
+    async def analyse(self, pdf_path: Path) -> Tuple[dict[str, str], list[str]]:
+        return {
+            "model_name": 123,
+            "voltage": None,
+            "typ_batt_capacity_wh": 50,
+            "typ_capacity_mah": 4000,
+            "rated_capacity_mah": 3800,
+            "rated_energy_wh": 48,
+        }, ["done"]
+
+    async def aclose(self) -> None:
+        return None
 
 
-def _create_pdf(path: Path, lines: list[str]) -> None:
-    doc = fitz.open()
-    page = doc.new_page()
-    cursor_y = 72
-    for line in lines:
-        page.insert_text((72, cursor_y), line)
-        cursor_y += 16
-    doc.save(path)
-    doc.close()
+@pytest.mark.asyncio
+async def test_processor_converts_field_values_to_strings(tmp_path: Path) -> None:
+    repository = JobRepository(url=f"sqlite:///{tmp_path/'queue.db'}")
+    service = JobService(repository=repository, storage_root=tmp_path / "jobs")
+    processor = AnalysisJobProcessor(label_service_factory=ConstantLabelService)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    pdf_path = source_dir / "doc.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%EOF")
+
+    job = service.create_job(
+        owner_id="alice",
+        source_path=str(source_dir),
+        files=[{"filename": "doc.pdf"}],
+    )
+    reporter = ProgressReporter(repository, service, "worker", repository.get_job(job.job_id))
+    completion = await processor.run(repository.get_job(job.job_id), service.job_directory(job.job_id), reporter)
+    assert completion.output_manifest[0]["model_name"] == "123"
 
 
-@pytest.mark.anyio
-async def test_default_pipeline_extracts_fields_and_creates_excel(tmp_path: Path):
-    sample_dir = tmp_path / "pdfs"
-    sample_dir.mkdir()
-    pdf_path = sample_dir / "battery.pdf"
-    _create_pdf(
-        pdf_path,
-        [
-            "Model Name: XZ-999",
-            "Nominal Voltage: 15.4V",
-            "Typ Batt Capacity Wh: 65Wh",
-            "Typ Capacity mAh: 4200mAh",
-            "Rated Capacity mAh: 4000mAh",
-            "Rated Energy Wh: 58Wh",
-        ],
+@pytest.mark.asyncio
+async def test_processor_raises_for_missing_file(tmp_path: Path) -> None:
+    repository = JobRepository(url=f"sqlite:///{tmp_path/'queue.db'}")
+    service = JobService(repository=repository, storage_root=tmp_path / "jobs")
+    processor = AnalysisJobProcessor(label_service_factory=ConstantLabelService)
+
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    # file intentionally missing
+
+    pdf_path = source_dir / "doc.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n%EOF")
+
+    job = service.create_job(
+        owner_id="alice",
+        source_path=str(source_dir),
+        files=[{"filename": "doc.pdf"}],
     )
 
-    request = AnalyzeRequest(
-        path=str(sample_dir),
-        files=[PDFFile(id=1, filename="battery.pdf")],
-    )
-    job_state = AnalysisJobState(job_id="job1", request=request, job_dir=tmp_path / "job")
-    pipeline = DefaultAnalysisPipeline(
-        document_loader=PDFDocumentLoader(max_pages=2),
-        analysis_engine=HeuristicAnalysisEngine(),
-        sleep_seconds=0.0,
-    )
-    callbacks = JobCallbacks(job_state)
+    (service.job_directory(job.job_id) / 'input' / 'doc.pdf').unlink()
 
-    result = await pipeline.run(job_state, callbacks)
-
-    assert result.download_path is not None
-    assert result.download_path.exists()
-    assert job_state.processed_count == 1
-    assert job_state.progress == pytest.approx(100.0)
-    assert job_state.results[0].model_name == "XZ-999"
-    assert job_state.results[0].voltage == "15.4V"
-
-
-@pytest.mark.anyio
-async def test_pipeline_handles_missing_fields_without_label(tmp_path: Path):
-    sample_dir = tmp_path / "inputs"
-    sample_dir.mkdir()
-    pdf_path = sample_dir / "product.pdf"
-
-    _create_pdf(
-        pdf_path,
-        [
-            "Model Name: PROD-77",
-            "Nominal Voltage: 11.1V",
-        ],
-    )
-
-    request = AnalyzeRequest(
-        path=str(sample_dir),
-        files=[PDFFile(id=1, filename="product.pdf")],
-    )
-
-    job_state = AnalysisJobState(job_id="job2", request=request, job_dir=tmp_path / "job")
-    pipeline = DefaultAnalysisPipeline(
-        document_loader=PDFDocumentLoader(max_pages=2),
-        analysis_engine=HeuristicAnalysisEngine(),
-        sleep_seconds=0.0,
-    )
-    callbacks = JobCallbacks(job_state)
-
-    await pipeline.run(job_state, callbacks)
-
-    assert len(job_state.results) == 1
-    result = job_state.results[0]
-    assert result.model_name == "PROD-77"
-    # 保持缺漏欄位為空字串，避免產生隨機值
-    assert result.typ_batt_capacity_wh == ""
-    assert result.typ_capacity_mah == ""
-
-    excel_path = job_state.job_dir / "analysis_result.xlsx"
-    workbook = load_workbook(excel_path)
-    worksheet = workbook.active
-    assert worksheet["E2"].fill.start_color.rgb == "FFFDEB95"
-
-
-@pytest.mark.anyio
-async def test_pipeline_honours_cancellation(tmp_path: Path):
-    sample_dir = tmp_path / "pdfs"
-    sample_dir.mkdir()
-    pdf_path = sample_dir / "cancel.pdf"
-    _create_pdf(
-        pdf_path,
-        [
-            "Model Name: CANCEL",
-            "Nominal Voltage: 10V",
-        ],
-    )
-
-    request = AnalyzeRequest(
-        path=str(sample_dir),
-        files=[PDFFile(id=1, filename="cancel.pdf")],
-    )
-    job_state = AnalysisJobState(job_id="job3", request=request, job_dir=tmp_path / "job")
-    job_state.cancel_event.set()
-
-    pipeline = DefaultAnalysisPipeline(
-        document_loader=PDFDocumentLoader(max_pages=1),
-        analysis_engine=HeuristicAnalysisEngine(),
-        sleep_seconds=0.0,
-    )
-    callbacks = JobCallbacks(job_state)
-
-    result = await pipeline.run(job_state, callbacks)
-
-    assert result.download_path is None
-    assert job_state.results == []
-    assert job_state.progress == pytest.approx(0.0)
-
-
-@pytest.mark.anyio
-async def test_pipeline_respects_label_analysis_service(tmp_path: Path):
-    sample_dir = tmp_path / "pdfs"
-    sample_dir.mkdir()
-    pdf_path = sample_dir / "battery.pdf"
-    _create_pdf(pdf_path, ["dummy"])
-
-    request = AnalyzeRequest(
-        path=str(sample_dir),
-        files=[PDFFile(id=1, filename="battery.pdf")],
-    )
-    job_state = AnalysisJobState(job_id="job4", request=request, job_dir=tmp_path / "job")
-
-    class StubLabelService:
-        def __init__(self) -> None:
-            self.calls: list[Path] = []
-
-        async def analyse(self, pdf: Path):
-            self.calls.append(pdf)
-            return (
-                {
-                    "model_name": "from_stub",
-                    "voltage": "42V",
-                },
-                ["stub message"],
-            )
-
-    stub_service = StubLabelService()
-    pipeline = DefaultAnalysisPipeline(
-        document_loader=PDFDocumentLoader(max_pages=1),
-        analysis_engine=HeuristicAnalysisEngine(),
-        sleep_seconds=0.0,
-        label_service=stub_service,  # type: ignore[arg-type]
-    )
-    callbacks = JobCallbacks(job_state)
-
-    await pipeline.run(job_state, callbacks)
-
-    assert stub_service.calls == [pdf_path]
-    assert job_state.results[0].model_name == "from_stub"
-    assert any("stub message" in message for message in job_state.messages)
+    job_state = repository.get_job(job.job_id)
+    reporter = ProgressReporter(repository, service, "worker", job_state)
+    with pytest.raises(FileNotFoundError):
+        await processor.run(job_state, service.job_directory(job.job_id), reporter)

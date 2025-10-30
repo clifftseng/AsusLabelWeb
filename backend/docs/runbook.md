@@ -48,3 +48,22 @@ npm start
 ## 8. 系統更新流程
 - 建議流程：`git pull` → `pip install -r backend/requirements.txt` → `npm install` → `pytest` → 部署。
 - 若更新涉及 `.env`，請同步更新作業環境並重啟後端服務。
+
+## Environment Variable Reference
+
+| Variable | Purpose |
+| --- | --- |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key |
+| `AZURE_OPENAI_DEPLOYMENT` | Azure OpenAI deployment to use |
+| `DOCUMENT_INTELLIGENCE_ENDPOINT` | Azure Document Intelligence endpoint |
+| `DOCUMENT_INTELLIGENCE_KEY` | Azure Document Intelligence key |
+| `JOB_QUEUE_URL` | Database URL for the persistent job queue (SQLite by default) |
+| `JOB_STORAGE_ROOT` | Root path for job working directories |
+| `JOB_MAX_WORKERS` | Maximum concurrent worker coroutines per backend process |
+| `JOB_HEARTBEAT_SEC` | Heartbeat interval for workers in seconds |
+| `JOB_STUCK_TIMEOUT_SEC` | Threshold in seconds to mark a running job as stuck |
+| `JOB_CLEANUP_AFTER_SEC` | Retention (seconds) before pruning completed job inputs |
+| `JOB_FAILED_RETENTION_SEC` | Retention (seconds) before pruning failed job assets |
+| `JOB_SSE_RETRY_MS` | Suggested retry interval for SSE clients (milliseconds) |
+| `JOB_EXPORT_TIMEZONE` | Timezone for timestamps in exported Excel files |

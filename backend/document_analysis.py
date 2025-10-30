@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional
 
 import fitz  # type: ignore[import]
-from analysis_components import AnalysisEngine, ExtractedDocument, ExtractedPage, PDFDocumentLoader
+from .analysis_components import AnalysisEngine, ExtractedDocument, ExtractedPage, PDFDocumentLoader
 
 os.environ.setdefault('AZURE_HTTP_LOGGING_ENABLED', 'false')
 os.environ.setdefault('AZURE_LOG_LEVEL', 'WARNING')

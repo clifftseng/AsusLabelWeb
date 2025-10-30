@@ -1,0 +1,261 @@
+2025-10-29 16:39:05,461 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: 工作已加入佇列，等待開始。
+2025-10-29 16:39:07,271 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: Starting analysis UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 16:39:07,271 - document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 16:39:07,271 - document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf, using AI workflow
+2025-10-29 16:39:09,181 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 16:39:09,190 - document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 16:39:18,312 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 16:39:19,900 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 16:39:19,901 - document_analysis - INFO - [Mode B] Completed analysis for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf with 1 populated fields
+2025-10-29 16:39:19,902 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf, using AI workflow
+2025-10-29 16:39:19,902 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: [Mode B] Azure OpenAI suggested pages [1] for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 16:39:19,902 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: [Mode B] Document Intelligence returned text for 1 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 16:39:19,902 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 16:39:19,902 - main - INFO - UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf fields: model_name='C41N2503', voltage='', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 16:39:19,902 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf completed (1/18)
+2025-10-29 16:39:19,965 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: Starting analysis UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf
+2025-10-29 16:39:19,965 - document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf
+2025-10-29 16:39:19,965 - document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf, using AI workflow
+2025-10-29 16:39:26,555 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 16:39:26,559 - document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [9, 14, 45] for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf
+2025-10-29 16:39:49,714 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 3 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf
+2025-10-29 16:39:51,802 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 16:39:51,804 - document_analysis - INFO - [Mode B] Completed analysis for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf with 6 populated fields
+2025-10-29 16:39:51,804 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf, using AI workflow
+2025-10-29 16:39:51,805 - main - INFO - Job a839fba49d5b4e1a8d8e6d827652e556: [Mode B] Azure OpenAI suggested pages [9, 14, 45] for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Report.pdf
+2025-10-29 16:57:03,951 - document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 16:57:03,952 - document_analysis - INFO - [Mode A] Matched format battery with 1 hints for battery.pdf
+2025-10-29 16:57:03,956 - document_analysis - INFO - [Mode A] Format-guided hints produced 1 candidate values for battery.pdf
+2025-10-29 16:57:03,956 - document_analysis - WARNING - [Mode A] No Document Intelligence extractor configured; falling back to direct text loading for battery.pdf
+2025-10-29 16:57:03,960 - document_analysis - INFO - [Mode A] Completed AI analysis for battery.pdf with 3 populated fields
+2025-10-29 16:57:04,582 - document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 16:57:04,582 - document_analysis - INFO - [Mode B] No matching format for battery.pdf, using AI workflow
+2025-10-29 16:57:06,458 - document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for battery.pdf
+2025-10-29 16:57:06,458 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for battery.pdf
+2025-10-29 16:57:06,458 - document_analysis - INFO - [Mode B] Completed analysis for battery.pdf with 1 populated fields
+2025-10-29 16:57:06,466 - main - INFO - Job da242bb491544b13ac4ef778e469809d: 工作已加入佇列，等待開始。
+2025-10-29 16:57:06,466 - main - INFO - Job d9b6eb13110a48baadae58f9946e0a4d: 工作已加入佇列，等待開始。
+2025-10-29 16:57:06,468 - main - INFO - Job 7ca4448b78ab4d5ca6ccfbde330f874f: 工作已加入佇列，等待開始。
+2025-10-29 16:57:06,468 - main - INFO - Job 4b5812c8ad834621809c3b933c6504f5: 工作已加入佇列，等待開始。
+2025-10-29 16:57:06,596 - main - INFO - Job 2b3c3f20d5b347f3a21ed205788904e4: 工作已加入佇列，等待開始。
+2025-10-29 16:57:07,222 - main - INFO - Job job1: Starting analysis battery.pdf
+2025-10-29 16:57:07,223 - document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 16:57:07,223 - document_analysis - INFO - [Mode B] No matching format for battery.pdf, using AI workflow
+2025-10-29 16:57:08,799 - document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for battery.pdf
+2025-10-29 16:57:16,597 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for battery.pdf
+2025-10-29 16:57:16,597 - document_analysis - INFO - [Mode B] Completed analysis for battery.pdf with 6 populated fields
+2025-10-29 16:57:16,597 - main - INFO - Job job1: [Mode B] No matching format for battery.pdf, using AI workflow
+2025-10-29 16:57:16,597 - main - INFO - Job job1: [Mode B] Azure OpenAI suggested pages [1] for battery.pdf
+2025-10-29 16:57:16,597 - main - INFO - Job job1: [Mode B] Document Intelligence returned text for 1 pages for battery.pdf
+2025-10-29 16:57:16,598 - main - INFO - Job job1: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 16:57:16,598 - main - INFO - battery.pdf fields: model_name='XZ-999', voltage='15.4V', typ_batt_capacity_wh='65Wh', typ_capacity_mah='4200mAh', rated_capacity_mah='4000mAh', rated_energy_wh='58Wh'
+2025-10-29 16:57:16,598 - main - INFO - Job job1: battery.pdf completed (1/1)
+2025-10-29 16:57:16,610 - main - INFO - Job job1: Exported analysis results to analysis_result.xlsx
+2025-10-29 16:57:17,212 - main - INFO - Job job2: Starting analysis product.pdf
+2025-10-29 16:57:17,212 - document_analysis - INFO - Starting analysis for PDF: product.pdf
+2025-10-29 16:57:17,212 - document_analysis - INFO - [Mode B] No matching format for product.pdf, using AI workflow
+2025-10-29 16:57:18,903 - document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for product.pdf
+2025-10-29 16:57:26,517 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for product.pdf
+2025-10-29 16:57:26,517 - document_analysis - INFO - [Mode B] Completed analysis for product.pdf with 2 populated fields
+2025-10-29 16:57:26,517 - main - INFO - Job job2: [Mode B] No matching format for product.pdf, using AI workflow
+2025-10-29 16:57:26,517 - main - INFO - Job job2: [Mode B] Azure OpenAI suggested pages [1] for product.pdf
+2025-10-29 16:57:26,517 - main - INFO - Job job2: [Mode B] Document Intelligence returned text for 1 pages for product.pdf
+2025-10-29 16:57:26,517 - main - INFO - Job job2: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 16:57:26,517 - main - INFO - product.pdf fields: model_name='PROD-77', voltage='11.1V', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 16:57:26,517 - main - INFO - Job job2: product.pdf completed (1/1)
+2025-10-29 16:57:26,529 - main - INFO - Job job2: Exported analysis results to analysis_result.xlsx
+2025-10-29 16:57:27,132 - main - INFO - Job job3: Analysis cancelled by user.
+2025-10-29 16:57:27,146 - main - INFO - Job job4: Starting analysis battery.pdf
+2025-10-29 16:57:27,146 - main - INFO - Job job4: stub message
+2025-10-29 16:57:27,146 - main - INFO - battery.pdf fields: model_name='from_stub', voltage='42V', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 16:57:27,146 - main - INFO - Job job4: battery.pdf completed (1/1)
+2025-10-29 16:57:27,156 - main - INFO - Job job4: Exported analysis results to analysis_result.xlsx
+2025-10-29 16:57:27,179 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: 工作已加入佇列，等待開始。
+2025-10-29 16:57:27,179 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: 工作已加入佇列，等待開始。
+2025-10-29 16:57:27,778 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: Starting analysis battery.pdf
+2025-10-29 16:57:27,778 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: Starting analysis battery.pdf
+2025-10-29 16:57:27,782 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: 已完成啟發式比對
+2025-10-29 16:57:27,782 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: 已完成啟發式比對
+2025-10-29 16:57:27,783 - main - INFO - battery.pdf fields: model_name='SYS-001', voltage='11.4V', typ_batt_capacity_wh='48Wh', typ_capacity_mah='', rated_capacity_mah='4000mAh', rated_energy_wh=''
+2025-10-29 16:57:27,783 - main - INFO - battery.pdf fields: model_name='SYS-001', voltage='11.4V', typ_batt_capacity_wh='48Wh', typ_capacity_mah='', rated_capacity_mah='4000mAh', rated_energy_wh=''
+2025-10-29 16:57:27,783 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: battery.pdf completed (1/1)
+2025-10-29 16:57:27,783 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: battery.pdf completed (1/1)
+2025-10-29 16:57:27,792 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: Exported analysis results to analysis_result.xlsx
+2025-10-29 16:57:27,792 - main - INFO - Job 6f4923a498eb49e89aed3cfa95afc193: Exported analysis results to analysis_result.xlsx
+2025-10-29 16:57:27,808 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: 工作已加入佇列，等待開始。
+2025-10-29 16:57:27,808 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: 工作已加入佇列，等待開始。
+2025-10-29 16:57:28,396 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: Starting analysis battery.pdf
+2025-10-29 16:57:28,396 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: Starting analysis battery.pdf
+2025-10-29 16:57:28,609 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: 已完成啟發式比對
+2025-10-29 16:57:28,609 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: 已完成啟發式比對
+2025-10-29 16:57:28,609 - main - INFO - battery.pdf fields: model_name='CANCEL-MODE', voltage='9.9V', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 16:57:28,609 - main - INFO - battery.pdf fields: model_name='CANCEL-MODE', voltage='9.9V', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 16:57:28,610 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: battery.pdf completed (1/1)
+2025-10-29 16:57:28,610 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: battery.pdf completed (1/1)
+2025-10-29 16:57:28,835 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: Exported analysis results to analysis_result.xlsx
+2025-10-29 16:57:28,835 - main - INFO - Job 339c70b7105147a1913b2024b3c5e8ba: Exported analysis results to analysis_result.xlsx
+2025-10-29 17:21:03,769 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: 工作已加入佇列，等待開始。
+2025-10-29 17:21:05,521 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Starting analysis 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-29 17:21:05,521 - document_analysis - INFO - Starting analysis for PDF: 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-29 17:21:05,521 - document_analysis - INFO - [Mode B] No matching format for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf, using AI workflow
+2025-10-29 17:21:05,966 - document_analysis - INFO - [Mode B] No keywords found, defaulting to first 1 pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-29 17:21:05,966 - document_analysis - INFO - [Mode B] Falling back to heuristic pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf: [1]
+2025-10-29 17:21:27,817 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-29 17:21:30,590 - document_analysis - INFO - [Mode B] Completed analysis for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf with 6 populated fields
+2025-10-29 17:21:30,590 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] No matching format for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf, using AI workflow
+2025-10-29 17:21:30,592 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Falling back to heuristic pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf: [1]
+2025-10-29 17:21:30,592 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Document Intelligence returned text for 1 pages for 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf
+2025-10-29 17:21:30,592 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 17:21:30,592 - main - INFO - 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf fields: model_name='C-19108', voltage='15.6V', typ_batt_capacity_wh='49.5Wh', typ_capacity_mah='3174mAh', rated_capacity_mah='3082mAh', rated_energy_wh='48.1Wh'
+2025-10-29 17:21:30,592 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: 120QAN07H-3 (UX8407_906QA416H)_20250729.pdf completed (1/4)
+2025-10-29 17:21:30,658 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Starting analysis Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf
+2025-10-29 17:21:30,658 - document_analysis - INFO - Starting analysis for PDF: Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf
+2025-10-29 17:21:30,658 - document_analysis - INFO - [Mode B] No matching format for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf, using AI workflow
+2025-10-29 17:21:32,295 - document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf
+2025-10-29 17:21:39,590 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf
+2025-10-29 17:21:41,263 - document_analysis - INFO - [Mode B] Completed analysis for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf with 1 populated fields
+2025-10-29 17:21:41,264 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] No matching format for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf, using AI workflow
+2025-10-29 17:21:41,264 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Azure OpenAI suggested pages [1] for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf
+2025-10-29 17:21:41,264 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Document Intelligence returned text for 1 pages for Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf
+2025-10-29 17:21:41,265 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 17:21:41,265 - main - INFO - Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf fields: model_name='20HK2', voltage='', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 17:21:41,265 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Ghost Rider 4S1P ATL CosMX HPT RS 20HK2 CE Cert.pdf completed (2/4)
+2025-10-29 17:21:41,319 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Starting analysis UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:21:41,319 - document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:21:41,320 - document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf, using AI workflow
+2025-10-29 17:21:43,227 - document_analysis - INFO - [Mode B] No keywords found, defaulting to first 1 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:21:43,227 - document_analysis - INFO - [Mode B] Falling back to heuristic pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf: [1]
+2025-10-29 17:21:50,531 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:21:52,161 - document_analysis - INFO - [Mode B] Completed analysis for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf with 1 populated fields
+2025-10-29 17:21:52,161 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf, using AI workflow
+2025-10-29 17:21:52,163 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Falling back to heuristic pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf: [1]
+2025-10-29 17:21:52,163 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Document Intelligence returned text for 1 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:21:52,163 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 17:21:52,163 - main - INFO - UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf fields: model_name='C41N2503', voltage='', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 17:21:52,163 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf completed (3/4)
+2025-10-29 17:21:52,235 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Starting analysis UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-29 17:21:52,235 - document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-29 17:21:52,235 - document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf, using AI workflow
+2025-10-29 17:21:52,332 - document_analysis - INFO - [Mode B] No keywords found, defaulting to first 2 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-29 17:21:52,332 - document_analysis - INFO - [Mode B] Falling back to heuristic pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf: [1, 2]
+2025-10-29 17:22:07,794 - document_analysis - INFO - [Mode B] Document Intelligence returned text for 2 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-29 17:22:09,715 - document_analysis - INFO - [Mode B] Completed analysis for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf with 1 populated fields
+2025-10-29 17:22:09,715 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf, using AI workflow
+2025-10-29 17:22:09,717 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Falling back to heuristic pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf: [1, 2]
+2025-10-29 17:22:09,717 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: [Mode B] Document Intelligence returned text for 2 pages for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf
+2025-10-29 17:22:09,717 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Mode B: no matching format; completed AI-only analysis workflow.
+2025-10-29 17:22:09,717 - main - INFO - UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf fields: model_name='C41N2503', voltage='', typ_batt_capacity_wh='', typ_capacity_mah='', rated_capacity_mah='', rated_energy_wh=''
+2025-10-29 17:22:09,717 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BSMI Cert.pdf completed (4/4)
+2025-10-29 17:22:09,773 - main - INFO - Job 522a39762bd34c439e94cb5cc1175843: Exported analysis results to analysis_result.xlsx
+2025-10-29 17:22:42,716 - main - INFO - Job 58d72061fd3b436ea372b4f4eef8bb30: 工作已加入佇列，等待開始。
+2025-10-29 17:22:43,883 - main - INFO - Job 58d72061fd3b436ea372b4f4eef8bb30: Starting analysis UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:22:43,884 - document_analysis - INFO - Starting analysis for PDF: UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf
+2025-10-29 17:22:43,884 - document_analysis - INFO - [Mode B] No matching format for UX8407SYS UV8407LCD 4S1P ATL3174(4236A5) C41N2503 BIS Letter.pdf, using AI workflow
+2025-10-29 18:05:09,582 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:05:09,854 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:05:38,418 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:05:38,420 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/8bbff253ed004bf2a78cc40c70a60528 "HTTP/1.1 200 OK"
+2025-10-29 18:05:38,475 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:05:38,481 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/be4ae510dea34778883e5b6ece32eb98/cancel "HTTP/1.1 200 OK"
+2025-10-29 18:05:38,483 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/be4ae510dea34778883e5b6ece32eb98 "HTTP/1.1 200 OK"
+2025-10-29 18:19:57,803 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:19:57,805 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/004481b3ac144f169c5a0ba71774b870 "HTTP/1.1 200 OK"
+2025-10-29 18:19:57,867 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:19:57,873 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ba7b8b614fe646fb9050da576acdb955/cancel "HTTP/1.1 200 OK"
+2025-10-29 18:19:57,875 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/ba7b8b614fe646fb9050da576acdb955 "HTTP/1.1 200 OK"
+2025-10-29 18:19:57,930 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:19:57,940 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/470b2cb635f044adac7679c599b0de69/download "HTTP/1.1 200 OK"
+2025-10-29 18:42:33,729 - backend.document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 18:42:33,730 - backend.document_analysis - INFO - [Mode A] Matched format battery with 1 hints for battery.pdf
+2025-10-29 18:42:33,734 - backend.document_analysis - INFO - [Mode A] Format-guided hints produced 1 candidate values for battery.pdf
+2025-10-29 18:42:33,734 - backend.document_analysis - WARNING - [Mode A] No Document Intelligence extractor configured; falling back to direct text loading for battery.pdf
+2025-10-29 18:42:33,739 - backend.document_analysis - INFO - [Mode A] Completed AI analysis for battery.pdf with 3 populated fields
+2025-10-29 18:42:34,369 - backend.document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 18:42:34,369 - backend.document_analysis - INFO - [Mode B] No matching format for battery.pdf, using AI workflow
+2025-10-29 18:42:36,309 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 18:42:36,317 - backend.document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for battery.pdf
+2025-10-29 18:42:36,318 - backend.document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for battery.pdf
+2025-10-29 18:42:36,318 - backend.document_analysis - INFO - [Mode B] Completed analysis for battery.pdf with 1 populated fields
+2025-10-29 18:42:36,840 - backend.jobs.worker - ERROR - Job f6b91004ca42477faaa28d6f9517c6e1 failed: Processing failed
+Traceback (most recent call last):
+  File "D:\WorkingArea\52_ASUS_Label\v0.5_web\backend\jobs\worker.py", line 109, in run_once
+    completion = await self.processor.run(job=job, job_dir=job_dir, reporter=reporter)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkingArea\52_ASUS_Label\v0.5_web\backend\tests\test_job_worker.py", line 32, in run
+    raise RuntimeError("Processing failed")
+RuntimeError: Processing failed
+2025-10-29 18:42:36,906 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:42:37,353 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:42:37,358 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/0d6a71e131614b1883e165bf3a369aef/cancel "HTTP/1.1 200 OK"
+2025-10-29 18:42:37,640 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:42:37,650 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/8533232c4a624dc089198c647510e1c3/download "HTTP/1.1 200 OK"
+2025-10-29 18:42:39,379 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:42:39,379 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:42:39,383 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:42:39,383 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:46:20,519 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:46:21,114 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:46:21,248 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:46:21,979 - backend.document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 18:46:21,980 - backend.document_analysis - INFO - [Mode A] Matched format battery with 1 hints for battery.pdf
+2025-10-29 18:46:21,984 - backend.document_analysis - INFO - [Mode A] Format-guided hints produced 1 candidate values for battery.pdf
+2025-10-29 18:46:21,985 - backend.document_analysis - WARNING - [Mode A] No Document Intelligence extractor configured; falling back to direct text loading for battery.pdf
+2025-10-29 18:46:21,989 - backend.document_analysis - INFO - [Mode A] Completed AI analysis for battery.pdf with 3 populated fields
+2025-10-29 18:46:22,619 - backend.document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 18:46:22,626 - backend.document_analysis - INFO - [Mode B] No matching format for battery.pdf, using AI workflow
+2025-10-29 18:46:24,620 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 18:46:24,629 - backend.document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for battery.pdf
+2025-10-29 18:46:24,629 - backend.document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for battery.pdf
+2025-10-29 18:46:24,630 - backend.document_analysis - INFO - [Mode B] Completed analysis for battery.pdf with 1 populated fields
+2025-10-29 18:46:25,155 - backend.jobs.worker - ERROR - Job 1a16d5b39f98417db7f22e85ff7050d3 failed: Processing failed
+Traceback (most recent call last):
+  File "D:\WorkingArea\52_ASUS_Label\v0.5_web\backend\jobs\worker.py", line 109, in run_once
+    completion = await self.processor.run(job=job, job_dir=job_dir, reporter=reporter)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkingArea\52_ASUS_Label\v0.5_web\backend\tests\test_job_worker.py", line 32, in run
+    raise RuntimeError("Processing failed")
+RuntimeError: Processing failed
+2025-10-29 18:46:25,222 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:46:25,506 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:46:25,512 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/6dc51e2b7f944bc9a341f8c496df4c55/cancel?owner_id=alice "HTTP/1.1 200 OK"
+2025-10-29 18:46:25,783 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:46:25,791 - httpx - INFO - HTTP Request: GET http://testserver/api/jobs/2e9c12aa986f4d848555baad1d6a7e59/download?owner_id=alice "HTTP/1.1 200 OK"
+2025-10-29 18:46:27,378 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:46:27,378 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:46:27,530 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:46:27,530 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:46:27,535 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:46:27,535 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:47:54,584 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:47:55,119 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:47:55,205 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:47:55,871 - backend.document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 18:47:55,872 - backend.document_analysis - INFO - [Mode A] Matched format battery with 1 hints for battery.pdf
+2025-10-29 18:47:55,875 - backend.document_analysis - INFO - [Mode A] Format-guided hints produced 1 candidate values for battery.pdf
+2025-10-29 18:47:55,876 - backend.document_analysis - WARNING - [Mode A] No Document Intelligence extractor configured; falling back to direct text loading for battery.pdf
+2025-10-29 18:47:55,880 - backend.document_analysis - INFO - [Mode A] Completed AI analysis for battery.pdf with 3 populated fields
+2025-10-29 18:47:56,506 - backend.document_analysis - INFO - Starting analysis for PDF: battery.pdf
+2025-10-29 18:47:56,506 - backend.document_analysis - INFO - [Mode B] No matching format for battery.pdf, using AI workflow
+2025-10-29 18:47:58,412 - httpx - INFO - HTTP Request: POST https://openai-smp-ak.openai.azure.com/openai/deployments/gpt-5-chat/chat/completions?api-version=2024-02-01 "HTTP/1.1 200 OK"
+2025-10-29 18:47:58,421 - backend.document_analysis - INFO - [Mode B] Azure OpenAI suggested pages [1] for battery.pdf
+2025-10-29 18:47:58,421 - backend.document_analysis - INFO - [Mode B] Document Intelligence returned text for 1 pages for battery.pdf
+2025-10-29 18:47:58,422 - backend.document_analysis - INFO - [Mode B] Completed analysis for battery.pdf with 1 populated fields
+2025-10-29 18:47:58,950 - backend.jobs.worker - ERROR - Job f178f5327d3b4b0bb14e595f2e21a371 failed: Processing failed
+Traceback (most recent call last):
+  File "D:\WorkingArea\52_ASUS_Label\v0.5_web\backend\jobs\worker.py", line 109, in run_once
+    completion = await self.processor.run(job=job, job_dir=job_dir, reporter=reporter)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\WorkingArea\52_ASUS_Label\v0.5_web\backend\tests\test_job_worker.py", line 32, in run
+    raise RuntimeError("Processing failed")
+RuntimeError: Processing failed
+2025-10-29 18:47:59,008 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:47:59,131 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:47:59,212 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:48:00,838 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:48:00,838 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs "HTTP/1.1 307 Temporary Redirect"
+2025-10-29 18:48:00,875 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:48:00,875 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:48:00,879 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:48:00,879 - httpx - INFO - HTTP Request: POST http://vllm.test/generate "HTTP/1.1 200 OK"
+2025-10-29 18:52:40,485 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"
+2025-10-29 18:52:41,227 - httpx - INFO - HTTP Request: POST http://testserver/api/jobs/ "HTTP/1.1 201 Created"

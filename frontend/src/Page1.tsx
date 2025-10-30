@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   ChangeEvent,
   FormEvent,
   useCallback,
@@ -8,11 +8,6 @@
   useState,
 } from 'react';
 import axios from 'axios';
-
-interface PDFFile {
-  id: number;
-  filename: string;
-}
 
 export interface AnalysisResult {
   id: number;
@@ -25,19 +20,41 @@ export interface AnalysisResult {
   rated_energy_wh: string;
 }
 
-interface AnalysisStatus {
-  job_id: string;
-  status: 'queued' | 'running' | 'completed' | 'cancelled' | 'failed';
-  progress: number;
-  processed_count: number;
-  total_count: number;
-  results: AnalysisResult[];
-  download_ready: boolean;
-  download_path: string | null;
-  error: string | null;
-  current_file: string | null;
-  messages: string[];
+interface PDFFile {
+  id: number;
+  filename: string;
 }
+
+interface JobSummary {
+  job_id: string;
+  owner_id: string;
+  source_path: string;
+  status: JobStatus;
+  progress: number;
+  total_files: number;
+  processed_files: number;
+  current_file: string | null;
+  error: string | null;
+  download_path: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface JobEvent {
+  event_id: number;
+  created_at: string;
+  level: string;
+  message: string;
+  metadata: Record<string, unknown>;
+}
+
+interface JobDetail extends JobSummary {
+  input_manifest: Array<Record<string, unknown>>;
+  output_manifest: AnalysisResult[];
+  events: JobEvent[];
+}
+
+type JobStatus = 'queued' | 'running' | 'retrying' | 'completed' | 'failed' | 'cancelled';
 
 interface Page1Props {
   setAnalysisResults: (results: AnalysisResult[]) => void;
@@ -47,34 +64,48 @@ interface Page1Props {
 }
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000';
-const POLL_INTERVAL_MS = 1500;
-const RECENT_PATH_KEY = 'analysis.recentPaths';
-
-const STATUS_LABELS: Record<AnalysisStatus['status'], string> = {
+const POLL_JOBS_INTERVAL_MS = 5000;
+const STATUS_LABELS: Record<JobStatus, string> = {
   queued: '排隊中',
+  retrying: '重試中',
   running: '分析中',
   completed: '已完成',
   cancelled: '已取消',
   failed: '失敗',
 };
+const FINAL_STATUSES: JobStatus[] = ['completed', 'failed', 'cancelled'];
+const RECENT_PATH_KEY = 'analysis.recentPaths';
+const OWNER_ID_KEY = 'analysis.ownerId';
 
-const parseRecentPaths = (): string[] => {
-  if (typeof window === 'undefined') {
-    return [];
-  }
+const parseStoredList = (key: string, fallback: string[] = []): string[] => {
+  if (typeof window === 'undefined') return fallback;
   try {
-    const raw = window.localStorage.getItem(RECENT_PATH_KEY);
-    if (!raw) {
-      return [];
-    }
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return parsed.filter((item) => typeof item === 'string');
     }
   } catch (err) {
-    // ignore parsing errors and fallback to empty list
+    // ignore malformed storage content
   }
-  return [];
+  return fallback;
+};
+
+const formatTimestamp = (value: string) => {
+  try {
+    const date = new Date(value);
+    return new Intl.DateTimeFormat('zh-TW', {
+      hour12: false,
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date);
+  } catch (err) {
+    return value;
+  }
 };
 
 const Page1: React.FC<Page1Props> = ({
@@ -83,29 +114,33 @@ const Page1: React.FC<Page1Props> = ({
   setAnalysisPath,
   analysisPath,
 }) => {
+  const [ownerId, setOwnerId] = useState<string>(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(OWNER_ID_KEY) : null;
+    return stored || '';
+  });
   const [networkPath, setNetworkPath] = useState<string>('O:\\AI\\projects\\AsusLabel');
+  const [recentPaths, setRecentPaths] = useState<string[]>(() => parseStoredList(RECENT_PATH_KEY));
   const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
-  const [loadingList, setLoadingList] = useState<boolean>(false);
-  const [analyzing, setAnalyzing] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [status, setStatus] = useState<AnalysisStatus | null>(null);
-  const [recentPaths, setRecentPaths] = useState<string[]>(() => parseRecentPaths());
+  const [jobList, setJobList] = useState<JobSummary[]>([]);
+  const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);
+  const [jobEvents, setJobEvents] = useState<JobEvent[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const [loadingPdfs, setLoadingPdfs] = useState<boolean>(false);
+  const [submittingJob, setSubmittingJob] = useState<boolean>(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-const pollingRef = useRef<number | null>(null);
-const pollingActiveRef = useRef<boolean>(false);
-  const jobPathRef = useRef<string>('');
+  const jobsPollRef = useRef<number | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const isMountedRef = useRef<boolean>(true);
 
-const clearPolling = useCallback(() => {
-  if (pollingRef.current !== null) {
-    window.clearTimeout(pollingRef.current);
-    pollingRef.current = null;
-  }
-  pollingActiveRef.current = false;
-}, []);
+  const selectedJob = useMemo(
+    () => jobList.find((job) => job.job_id === selectedJobId) ?? null,
+    [jobList, selectedJobId],
+  );
 
-  useEffect(() => () => clearPolling(), [clearPolling]);
+  const ownerIdSafe = ownerId.trim() || 'anonymous';
 
   const rememberPath = useCallback((path: string) => {
     setRecentPaths((previous) => {
@@ -115,83 +150,160 @@ const clearPolling = useCallback(() => {
           window.localStorage.setItem(RECENT_PATH_KEY, JSON.stringify(deduped));
         }
       } catch (err) {
-        // ignore storage errors
+        // ignore storage issues
       }
       return deduped;
     });
   }, []);
 
-  const resetAnalysis = useCallback(() => {
-    clearPolling();
-    setJobId(null);
-    setStatus(null);
-    setAnalyzing(false);
-    setAnalysisResults([]);
-    setAnalysisPath('');
-  }, [clearPolling, setAnalysisPath, setAnalysisResults]);
-
-  const fetchPdfList = useCallback(
-    async (rawPath: string) => {
-      const trimmedPath = rawPath.trim();
-      if (!trimmedPath) {
-        setError('請先輸入要掃描的來源資料夾。');
-        return;
-      }
-
-      resetAnalysis();
-      setLoadingList(true);
-      setError(null);
-      setPdfFiles([]);
-      setSelectedFiles(new Set());
-      setNetworkPath(trimmedPath);
-
+  const persistOwnerId = useCallback(
+    (value: string) => {
       try {
-        const response = await axios.post<PDFFile[]>(`${API_BASE_URL}/api/list-pdfs`, {
-          path: trimmedPath,
-        });
-        const files = response.data;
-        setPdfFiles(files);
-        const initialSelected = new Set(files.map((item) => item.filename));
-        setSelectedFiles(initialSelected);
-        rememberPath(trimmedPath);
-        if (files.length === 0) {
-          setError('指定路徑內沒有任何 PDF 檔案。');
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(OWNER_ID_KEY, value);
         }
       } catch (err) {
-        if (axios.isAxiosError(err) && err.response) {
-          const message =
-            typeof err.response.data?.detail === 'string'
-              ? err.response.data.detail
-              : '無法載入 PDF 清單，請確認路徑是否存在並具有讀取權限。';
-          setError(message);
-        } else {
-          setError('無法載入 PDF 清單，請檢查網路或伺服器狀態。');
-        }
-      } finally {
-        setLoadingList(false);
+        // ignore
       }
     },
-    [rememberPath, resetAnalysis],
+    [],
   );
+
+  const fetchJobs = useCallback(async () => {
+    try {
+      const response = await axios.get<JobSummary[]>(`${API_BASE_URL}/api/jobs`, {
+        params: { owner_id: ownerIdSafe },
+      });
+      if (!isMountedRef.current) return;
+      setJobList(response.data);
+      setJobsError(null);
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      setJobsError('無法取得工作列表，請稍後再試。');
+    }
+  }, [ownerIdSafe]);
+
+  const fetchJobDetail = useCallback(
+    async (jobId: string) => {
+      try {
+        const response = await axios.get<JobDetail>(`${API_BASE_URL}/api/jobs/${jobId}`, {
+          params: { owner_id: ownerIdSafe },
+        });
+        if (!isMountedRef.current) return;
+        setJobDetail(response.data);
+        setJobEvents(response.data.events);
+        setAnalysisResults(response.data.output_manifest);
+        setAnalysisPath(response.data.source_path);
+      } catch (err) {
+        if (!isMountedRef.current) return;
+        setAnalysisError('無法取得工作詳情，請稍後再試。');
+      }
+    },
+    [ownerIdSafe, setAnalysisPath, setAnalysisResults],
+  );
+
+  const closeEventSource = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
+
+  const subscribeToJobEvents = useCallback(
+    (jobId: string) => {
+      closeEventSource();
+      if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') {
+        return;
+      }
+      const eventSource = new EventSource(
+        `${API_BASE_URL}/api/jobs/${jobId}/events?owner_id=${encodeURIComponent(ownerIdSafe)}`,
+      );
+      eventSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as JobEvent;
+          setJobEvents((previous) => {
+            const exists = previous.some((item) => item.event_id === payload.event_id);
+            if (exists) {
+              return previous;
+            }
+            return [...previous, payload].sort((a, b) => a.event_id - b.event_id);
+          });
+          fetchJobDetail(jobId);
+        } catch (err) {
+          // ignore malformed payload
+        }
+      };
+      eventSource.onerror = () => {
+        eventSource.close();
+        eventSourceRef.current = null;
+      };
+      eventSourceRef.current = eventSource;
+    },
+    [closeEventSource, fetchJobDetail, ownerIdSafe],
+  );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchJobs();
+    jobsPollRef.current = window.setInterval(fetchJobs, POLL_JOBS_INTERVAL_MS);
+    return () => {
+      isMountedRef.current = false;
+      if (jobsPollRef.current !== null) {
+        window.clearInterval(jobsPollRef.current);
+        jobsPollRef.current = null;
+      }
+      closeEventSource();
+    };
+  }, [fetchJobs, closeEventSource]);
+
+  useEffect(() => {
+    if (!selectedJobId) {
+      closeEventSource();
+      setJobDetail(null);
+      setJobEvents([]);
+      return;
+    }
+    fetchJobDetail(selectedJobId);
+    subscribeToJobEvents(selectedJobId);
+  }, [selectedJobId, fetchJobDetail, subscribeToJobEvents, closeEventSource]);
+
+  useEffect(() => {
+    if (!jobDetail) return;
+    if (FINAL_STATUSES.includes(jobDetail.status)) {
+      closeEventSource();
+    }
+  }, [jobDetail, closeEventSource]);
+
+  const handleOwnerChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setOwnerId(event.target.value);
+    persistOwnerId(event.target.value);
+  };
 
   const handlePathChange = (event: ChangeEvent<HTMLInputElement>) => {
     setNetworkPath(event.target.value);
   };
 
-  const handleLoadPdfs = useCallback(
-    async (event: FormEvent) => {
-      event.preventDefault();
-      await fetchPdfList(networkPath);
-    },
-    [fetchPdfList, networkPath],
-  );
+  const handleLoadPdfs = async () => {
+    setLoadingPdfs(true);
+    try {
+      const response = await axios.post<PDFFile[]>(`${API_BASE_URL}/api/list-pdfs`, {
+        path: networkPath,
+      });
+      setPdfFiles(response.data);
+      setSelectedFiles(new Set(response.data.map((item) => item.filename)));
+      rememberPath(networkPath);
+      setAnalysisError(null);
+    } catch (err) {
+      setAnalysisError('無法取得 PDF 列表，請確認路徑或稍後再試。');
+    } finally {
+      setLoadingPdfs(false);
+    }
+  };
 
-  const handleSelectRecentPath = useCallback(
-    (path: string) => {
-      void fetchPdfList(path);
-    },
-    [fetchPdfList],
-  );
+  const handlePathSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await handleLoadPdfs();
+  };
 
   const toggleFileSelection = (filename: string) => {
     setSelectedFiles((previous) => {
@@ -205,376 +317,327 @@ const clearPolling = useCallback(() => {
     });
   };
 
-  const selectedFileList = useMemo(
-    () => pdfFiles.filter((file) => selectedFiles.has(file.filename)),
-    [pdfFiles, selectedFiles],
-  );
-
-  const handleStatusUpdate = useCallback(
-    (nextStatus: AnalysisStatus) => {
-      setStatus(nextStatus);
-      const isActive = nextStatus.status === 'queued' || nextStatus.status === 'running';
-      setAnalyzing(isActive);
-      setAnalysisResults(nextStatus.results);
-
-      if (nextStatus.results.length > 0 || nextStatus.download_ready) {
-        setAnalysisPath(jobPathRef.current);
-      }
-
-      if (nextStatus.status === 'completed' || nextStatus.status === 'cancelled' || nextStatus.status === 'failed') {
-        clearPolling();
-      }
-
-      if (nextStatus.status === 'failed' && nextStatus.error) {
-        setError(nextStatus.error);
-      }
-    },
-    [clearPolling, setAnalysisPath, setAnalysisResults],
-  );
-
-  const pollJobStatus = useCallback(
-    async (job: string) => {
-      try {
-        const response = await axios.get<AnalysisStatus>(`${API_BASE_URL}/api/analyze/status/${job}`);
-        handleStatusUpdate(response.data);
-      } catch (err) {
-        clearPolling();
-        setAnalyzing(false);
-        if (axios.isAxiosError(err) && err.response) {
-          const message =
-            typeof err.response.data?.detail === 'string'
-              ? err.response.data.detail
-              : '無法取得最新進度，請稍後再試。';
-          setError(message);
-        } else {
-          setError('無法取得最新進度，請檢查網路或伺服器狀態。');
-        }
-      }
-    },
-    [clearPolling, handleStatusUpdate],
-  );
-
-  const startPolling = useCallback(
-    (job: string) => {
-      clearPolling();
-      pollingActiveRef.current = true;
-
-      const pollOnce = async () => {
-        if (!pollingActiveRef.current) {
-          return;
-        }
-        await pollJobStatus(job);
-        if (!pollingActiveRef.current) {
-          return;
-        }
-        pollingRef.current = window.setTimeout(() => {
-          void pollOnce();
-        }, POLL_INTERVAL_MS);
-      };
-
-      void pollOnce();
-    },
-    [clearPolling, pollJobStatus],
-  );
-
   const handleAnalyze = async () => {
-    if (selectedFileList.length === 0) {
-      setError('請先勾選欲分析的 PDF 檔案。');
+    if (selectedFiles.size === 0) {
+      setAnalysisError('請至少選擇一個檔案。');
       return;
     }
-
-    const payloadFiles = selectedFileList.map((file) => ({
-      id: file.id,
-      filename: file.filename,
-    }));
-
-    setError(null);
-    setAnalysisResults([]);
-    setStatus(null);
-    jobPathRef.current = networkPath.trim();
-
+    setSubmittingJob(true);
     try {
-      setAnalyzing(true);
-      const response = await axios.post<{ job_id: string; status?: AnalysisStatus['status'] }>(
-        `${API_BASE_URL}/api/analyze/start`,
-        {
-          path: jobPathRef.current,
-          files: payloadFiles,
-        },
-      );
-      const nextJobId = response.data.job_id;
-      setJobId(nextJobId);
-      const initialStatus: AnalysisStatus = {
-        job_id: nextJobId,
-        status: response.data.status ?? 'queued',
-        progress: 0,
-        processed_count: 0,
-        total_count: payloadFiles.length,
-        results: [],
-        download_ready: false,
-        download_path: null,
-        error: null,
-        current_file: null,
-        messages: ['工作已加入佇列，等待開始。'],
+      const payload = {
+        owner_id: ownerIdSafe,
+        source_path: networkPath,
+        files: Array.from(selectedFiles).map((filename) => ({ filename })),
       };
-      setStatus(initialStatus);
-      startPolling(nextJobId);
+      const response = await axios.post<JobSummary>(`${API_BASE_URL}/api/jobs`, payload);
+      setAnalysisError(null);
+      setSelectedJobId(response.data.job_id);
+      setJobDetail(null);
+      setJobEvents([]);
+      fetchJobs();
     } catch (err) {
-      setAnalyzing(false);
-      if (axios.isAxiosError(err) && err.response) {
-        const message =
-          typeof err.response.data?.detail === 'string'
-            ? err.response.data.detail
-            : '無法啟動分析，請稍後再試或聯絡系統管理員。';
-        setError(message);
-      } else {
-        setError('無法啟動分析，請檢查網路或伺服器狀態。');
-      }
+      setAnalysisError('建立分析工作失敗，請稍後再試。');
+    } finally {
+      setSubmittingJob(false);
     }
   };
 
-  const stopPollingWithStatus = useCallback(
-    (nextStatus: AnalysisStatus) => {
-      clearPolling();
-      setAnalyzing(false);
-      handleStatusUpdate(nextStatus);
-    },
-    [clearPolling, handleStatusUpdate],
-  );
-
-  const handleCancel = async () => {
-    if (!jobId) {
-      return;
-    }
+  const handleCancel = async (jobId: string) => {
     try {
-      const response = await axios.post<AnalysisStatus>(`${API_BASE_URL}/api/analyze/stop/${jobId}`);
-      stopPollingWithStatus(response.data);
+      await axios.post(
+        `${API_BASE_URL}/api/jobs/${jobId}/cancel`,
+        { reason: 'Cancel by user', cancelled_by: ownerIdSafe },
+        { params: { owner_id: ownerIdSafe } },
+      );
+      fetchJobDetail(jobId);
+      fetchJobs();
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response) {
-        const message =
-          typeof err.response.data?.detail === 'string'
-            ? err.response.data.detail
-            : '無法終止分析，請稍後再試。';
-        setError(message);
-      } else {
-        setError('無法終止分析，請檢查網路或伺服器狀態。');
-      }
+      setAnalysisError('取消工作失敗，請稍後再試。');
     }
   };
 
-  const isJobActive = status ? status.status === 'queued' || status.status === 'running' : analyzing;
-  const canDownload = Boolean(status?.download_ready && jobId);
-  const statusLabel = status ? STATUS_LABELS[status.status] ?? status.status.toUpperCase() : '';
+  const downloadUrl = jobDetail?.download_path
+    ? `${API_BASE_URL}/api/jobs/${jobDetail.job_id}/download?owner_id=${encodeURIComponent(
+        ownerIdSafe,
+      )}`
+    : null;
 
-  const messagesWithSeparators = useMemo(() => {
-    if (!status || status.messages.length === 0) {
-      return [];
-    }
+  const statusLabel = selectedJob ? STATUS_LABELS[selectedJob.status] : '';
+  const isJobRunning =
+    selectedJob && !FINAL_STATUSES.includes(selectedJob.status) ? selectedJob.job_id : null;
 
-    const processed: { type: 'message' | 'separator'; content: string; key: string }[] = [];
-    let lastFile = '';
-    let messageIndex = 0;
-
-    status.messages.forEach((message, index) => {
-      const match = message.match(/開始分析 (.+)/);
-      if (match && match[1] && match[1] !== lastFile) {
-        if (lastFile !== '') {
-          processed.push({ type: 'separator', content: '==============', key: `sep-${messageIndex++}` });
-        }
-        lastFile = match[1];
-      }
-      processed.push({ type: 'message', content: message, key: `msg-${index}` });
-    });
-    return processed;
-  }, [status]);
+  const jobResults = jobDetail?.output_manifest ?? analysisResults;
 
   return (
-    <div className="container mt-5">
-      <h1 className="mb-4">批次標籤分析工具</h1>
+    <div className="container py-4">
+      <h1 className="mb-4">ASUS Label 分析作業</h1>
 
-      <form onSubmit={handleLoadPdfs} className="mb-4">
-        <label htmlFor="networkPath" className="form-label fw-semibold">
-          來源資料夾
-        </label>
-        <div className="input-group">
-          <input
-            id="networkPath"
-            type="text"
-            className="form-control"
-            placeholder="請輸入來源資料夾，例如 \\\\server\\share"
-            value={networkPath}
-            onChange={handlePathChange}
-            required
-          />
-          <button type="submit" className="btn btn-primary" disabled={loadingList}>
-            {loadingList ? '載入中…' : '載入 PDF'}
-          </button>
-        </div>
-      </form>
+      <div className="row">
+        <div className="col-lg-3 mb-4">
+          <div className="card h-100">
+            <div className="card-header">
+              <strong>使用者 / 工作列表</strong>
+            </div>
+            <div className="card-body d-flex flex-column" style={{ minHeight: '550px' }}>
+              <div className="mb-3">
+                <label htmlFor="ownerId" className="form-label">
+                  使用者代號
+                </label>
+                <input
+                  id="ownerId"
+                  className="form-control"
+                  value={ownerId}
+                  onChange={handleOwnerChange}
+                  placeholder="請輸入使用者代號"
+                />
+              </div>
 
-      {recentPaths.length > 0 && (
-        <div className="mb-4">
-          <span className="fw-semibold me-2">最近使用：</span>
-          {recentPaths.map((path) => (
-            <button
-              key={path}
-              type="button"
-              className="btn btn-sm btn-outline-secondary me-2 mb-2"
-              onClick={() => handleSelectRecentPath(path)}
-              disabled={loadingList || isJobActive}
-            >
-              {path}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {error && (
-        <div className="alert alert-danger" role="alert">
-          {error}
-        </div>
-      )}
-
-      {pdfFiles.length > 0 && (
-        <div className="mb-4">
-          <h2 className="mb-3">PDF 檔案 ({pdfFiles.length})</h2>
-          <p className="text-muted">已勾選 {selectedFileList.length} 筆檔案</p>
-          <div className="table-responsive">
-            <table className="table table-striped align-middle">
-              <thead>
-                <tr>
-                  <th scope="col" style={{ width: '80px' }}>
-                    #
-                  </th>
-                  <th scope="col">檔名</th>
-                  <th scope="col" style={{ width: '140px' }}>
-                    加入分析
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {pdfFiles.map((file) => (
-                  <tr key={file.id}>
-                    <td>{file.id}</td>
-                    <td>{file.filename}</td>
-                    <td>
-                      <input
-                        type="checkbox"
-                        className="form-check-input"
-                        checked={selectedFiles.has(file.filename)}
-                        onChange={() => toggleFileSelection(file.filename)}
-                        disabled={isJobActive}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="d-flex flex-wrap gap-3">
-            <button
-              className="btn btn-success"
-              onClick={handleAnalyze}
-              disabled={isJobActive || selectedFileList.length === 0}
-              type="button"
-            >
-              {isJobActive ? '分析中…' : '開始分析'}
-            </button>
-            {isJobActive && (
-              <button className="btn btn-outline-danger" type="button" onClick={handleCancel}>
-                終止分析
-              </button>
-            )}
-            {canDownload && jobId && (
-              <a
-                className="btn btn-outline-primary"
-                href={`${API_BASE_URL}/api/analyze/download/${jobId}`}
-              >
-                下載結果
-              </a>
-            )}
-          </div>
-        </div>
-      )}
-
-      {analysisResults.length > 0 && (
-        <div className="mt-5">
-          <h2 className="mb-3">分析結果</h2>
-          {analysisPath && (
-            <p>
-              來源路徑：<strong className="ms-1">{analysisPath}</strong>
-            </p>
-          )}
-          <div className="table-responsive">
-            <table className="table table-bordered">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>檔名</th>
-                  <th>Model Name</th>
-                  <th>Voltage</th>
-                  <th>Typ Batt Capacity Wh</th>
-                  <th>Typ Capacity mAh</th>
-                  <th>Rated Capacity mAh</th>
-                  <th>Rated Energy Wh</th>
-                </tr>
-              </thead>
-              <tbody>
-                {analysisResults.map((result) => (
-                  <tr key={result.id}>
-                    <td>{result.id}</td>
-                    <td>{result.filename}</td>
-                    <td>{result.model_name}</td>
-                    <td>{result.voltage}</td>
-                    <td>{result.typ_batt_capacity_wh}</td>
-                    <td>{result.typ_capacity_mah}</td>
-                    <td>{result.rated_capacity_mah}</td>
-                    <td>{result.rated_energy_wh}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {status && (
-        <div className="mb-4">
-          <h2 className="mb-3">分析進度</h2>
-          <div
-            className="progress mb-2"
-            role="progressbar"
-            aria-valuenow={Math.round(status.progress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div className="progress-bar" style={{ width: `${Math.round(status.progress)}%` }}>
-              {Math.round(status.progress)}%
+              <div className="flex-grow-1 overflow-auto border rounded p-2 bg-light">
+                {jobsError && <p className="text-danger mb-2">{jobsError}</p>}
+                {jobList.length === 0 ? (
+                  <p className="text-muted">目前沒有工作記錄。</p>
+                ) : (
+                  <ul className="list-unstyled mb-0">
+                    {jobList.map((job) => (
+                      <li key={job.job_id} className="mb-2">
+                        <button
+                          type="button"
+                          className={`btn btn-sm w-100 text-start ${
+                            selectedJobId === job.job_id ? 'btn-primary' : 'btn-outline-primary'
+                          }`}
+                          onClick={() => setSelectedJobId(job.job_id)}
+                        >
+                          <div className="d-flex justify-content-between">
+                            <span className="fw-semibold">{job.job_id.slice(0, 8)}</span>
+                            <span>{STATUS_LABELS[job.status]}</span>
+                          </div>
+                          <div className="small text-muted">
+                            {Math.round(job.progress * 100) / 100}% · {job.total_files} 檔
+                          </div>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
-          <p className="mb-1">
-            狀態：<strong className="ms-1">{statusLabel}</strong>
-          </p>
-          <p className="mb-3">
-            處理進度：{status.processed_count} / {status.total_count}
-            {status.current_file ? `（目前處理：${status.current_file}）` : ''}
-          </p>
-          <div className="bg-light border rounded p-3" data-testid="analysis-log" style={{ height: '250px', overflowY: 'auto' }}>
-            <h3 className="h6 mb-2">即時訊息</h3>
-            {messagesWithSeparators.length > 0 ? (
-              <ul className="mb-0 list-unstyled">
-                {messagesWithSeparators.map((item) => (
-                  <li key={item.key} className={item.type === 'separator' ? 'text-center fw-bold my-2' : ''}>
-                    {item.content}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-muted mb-0">暫無訊息</p>
-            )}
-          </div>
         </div>
-      )}
+
+        <div className="col-lg-9">
+          <div className="card mb-4">
+            <div className="card-header">
+              <strong>建立分析工作</strong>
+            </div>
+            <div className="card-body">
+              <form className="row g-3 mb-3" onSubmit={handlePathSubmit}>
+                <div className="col-md-8">
+                  <label className="form-label" htmlFor="networkPath">
+                    資料夾路徑
+                  </label>
+                  <input
+                    id="networkPath"
+                    className="form-control"
+                    placeholder="請輸入來源資料夾"
+                    value={networkPath}
+                    onChange={handlePathChange}
+                  />
+                </div>
+                <div className="col-md-4 d-flex align-items-end">
+                  <button
+                    className="btn btn-secondary w-100"
+                    type="submit"
+                    disabled={loadingPdfs}
+                  >
+                    {loadingPdfs ? '載入中…' : '載入 PDF'}
+                  </button>
+                </div>
+              </form>
+
+              {recentPaths.length > 0 && (
+                <div className="mb-3">
+                  <div className="d-flex flex-wrap gap-2">
+                    {recentPaths.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => {
+                          setNetworkPath(item);
+                          setSelectedFiles(new Set());
+                        }}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pdfFiles.length > 0 && (
+                <div className="table-responsive mb-3" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                  <table className="table table-bordered table-sm">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ width: '60px' }}>#</th>
+                        <th>檔名</th>
+                        <th style={{ width: '70px' }}>選取</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pdfFiles.map((file) => (
+                        <tr key={file.id}>
+                          <td>{file.id}</td>
+                          <td>{file.filename}</td>
+                          <td>
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={selectedFiles.has(file.filename)}
+                              onChange={() => toggleFileSelection(file.filename)}
+                              disabled={Boolean(isJobRunning)}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="d-flex gap-3">
+                <button
+                  className="btn btn-success"
+                  type="button"
+                  onClick={handleAnalyze}
+                  disabled={submittingJob || selectedFiles.size === 0}
+                >
+                  {submittingJob ? '建立中…' : '建立分析工作'}
+                </button>
+                {selectedJobId && isJobRunning && (
+                  <button
+                    className="btn btn-outline-danger"
+                    type="button"
+                    onClick={() => handleCancel(selectedJobId)}
+                  >
+                    終止工作
+                  </button>
+                )}
+                {downloadUrl && (
+                  <a className="btn btn-outline-primary" href={downloadUrl}>
+                    下載結果
+                  </a>
+                )}
+              </div>
+              {analysisError && <p className="text-danger mt-3 mb-0">{analysisError}</p>}
+            </div>
+          </div>
+
+          {selectedJob && (
+            <div className="card mb-4">
+              <div className="card-header">
+                <strong>工作詳情</strong>
+              </div>
+              <div className="card-body">
+                <div className="row mb-3">
+                  <div className="col-md-4">
+                    <div className="fw-semibold">Job ID</div>
+                    <div>{selectedJob.job_id}</div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="fw-semibold">狀態</div>
+                    <div>{statusLabel}</div>
+                  </div>
+                  <div className="col-md-4">
+                    <div className="fw-semibold">進度</div>
+                    <div>
+                      {selectedJob.processed_files}/{selectedJob.total_files} ·{' '}
+                      {Math.round(selectedJob.progress)}%
+                    </div>
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <div className="fw-semibold">來源路徑</div>
+                  <div>{selectedJob.source_path}</div>
+                </div>
+                {selectedJob.error && (
+                  <div className="alert alert-warning" role="alert">
+                    {selectedJob.error}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {jobResults.length > 0 && (
+            <div className="card mb-4">
+              <div className="card-header">
+                <strong>分析結果</strong>
+              </div>
+              <div className="card-body">
+                <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  <table className="table table-striped table-bordered table-sm">
+                    <thead className="table-light">
+                      <tr>
+                        <th>#</th>
+                        <th>檔名</th>
+                        <th>Model Name</th>
+                        <th>Voltage</th>
+                        <th>Typ Batt Capacity Wh</th>
+                        <th>Typ Capacity mAh</th>
+                        <th>Rated Capacity mAh</th>
+                        <th>Rated Energy Wh</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {jobResults.map((result) => (
+                        <tr key={`${result.filename}-${result.id}`}>
+                          <td>{result.id}</td>
+                          <td>{result.filename}</td>
+                          <td>{result.model_name}</td>
+                          <td>{result.voltage}</td>
+                          <td>{result.typ_batt_capacity_wh}</td>
+                          <td>{result.typ_capacity_mah}</td>
+                          <td>{result.rated_capacity_mah}</td>
+                          <td>{result.rated_energy_wh}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {jobEvents.length > 0 && (
+            <div className="card mb-4">
+              <div className="card-header">
+                <strong>處理紀錄</strong>
+              </div>
+              <div className="card-body bg-light" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                <ul className="list-unstyled mb-0">
+                  {jobEvents.map((event) => (
+                    <li key={event.event_id} className="mb-2">
+                      <div className="small text-muted">{formatTimestamp(event.created_at)}</div>
+                      <div
+                        className={
+                          event.level === 'error'
+                            ? 'text-danger'
+                            : event.level === 'warning'
+                            ? 'text-warning'
+                            : ''
+                        }
+                      >
+                        {event.message}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

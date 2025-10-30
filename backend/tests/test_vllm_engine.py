@@ -1,10 +1,15 @@
 import json
+import sys
 from pathlib import Path
 
 import httpx
 import pytest
 
-from analysis_components import ExtractedDocument, ExtractedPage
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.analysis_components import ExtractedDocument, ExtractedPage
 
 
 def _make_document(text: str = "Battery data") -> ExtractedDocument:
@@ -15,7 +20,7 @@ def _make_document(text: str = "Battery data") -> ExtractedDocument:
 
 
 def _build_engine(mock_handler):
-    from analysis_components import VLLMAnalysisEngine
+    from backend.analysis_components import VLLMAnalysisEngine
 
     transport = httpx.MockTransport(mock_handler)
 

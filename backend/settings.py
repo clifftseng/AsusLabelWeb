@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -63,4 +65,33 @@ def configure_logging() -> None:
     if not root_logger.handlers:
         root_logger.addHandler(file_handler)
         root_logger.addHandler(stream_handler)
+
+
+@dataclass(slots=True)
+class AppSettings:
+    job_queue_url: str = os.getenv("JOB_QUEUE_URL", "sqlite:///backend/job_queue.db")
+    job_storage_root: Path = Path(
+        os.getenv(
+            "JOB_STORAGE_ROOT",
+            Path(__file__).resolve().parent / "job_runs",
+        )
+    )
+    job_max_workers: int = int(os.getenv("JOB_MAX_WORKERS", "2"))
+    job_heartbeat_sec: int = int(os.getenv("JOB_HEARTBEAT_SEC", "15"))
+    job_stuck_timeout_sec: int = int(os.getenv("JOB_STUCK_TIMEOUT_SEC", "300"))
+    job_cleanup_after_sec: int = int(os.getenv("JOB_CLEANUP_AFTER_SEC", "43200"))
+    job_failed_retention_sec: int = int(os.getenv("JOB_FAILED_RETENTION_SEC", "172800"))
+    job_sse_retry_ms: int = int(os.getenv("JOB_SSE_RETRY_MS", "5000"))
+    job_export_timezone: str = os.getenv("JOB_EXPORT_TIMEZONE", "UTC")
+
+
+_SETTINGS: Optional[AppSettings] = None
+
+
+def get_settings() -> AppSettings:
+    global _SETTINGS
+    ensure_env_loaded()
+    if _SETTINGS is None:
+        _SETTINGS = AppSettings()
+    return _SETTINGS
 

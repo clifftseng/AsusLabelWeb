@@ -8,12 +8,12 @@ from typing import Dict
 import fitz  # type: ignore[import]
 import pytest
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from analysis_components import HeuristicAnalysisEngine, PDFDocumentLoader
-from document_analysis import (
+from backend.analysis_components import HeuristicAnalysisEngine, PDFDocumentLoader
+from backend.document_analysis import (
     AzureDocumentIntelligenceExtractor,
     FormatGuidedExtractor,
     FormatRepository,
