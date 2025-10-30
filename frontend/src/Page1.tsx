@@ -80,7 +80,8 @@ const STATUS_LABELS: Record<JobStatus, string> = {
 };
 const FINAL_STATUSES: JobStatus[] = ['completed', 'failed', 'cancelled'];
 const RECENT_PATH_KEY = 'analysis.recentPaths';
-const OWNER_ID_KEY = 'analysis.ownerId';
+const MAX_RECENT_PATHS = 3;
+export const DEFAULT_OWNER_ID = process.env.REACT_APP_DEFAULT_OWNER_ID ?? 'anonymous';
 
 const parseStoredList = (key: string, fallback: string[] = []): string[] => {
   if (typeof window === 'undefined') return fallback;
@@ -89,7 +90,9 @@ const parseStoredList = (key: string, fallback: string[] = []): string[] => {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
-      return parsed.filter((item) => typeof item === 'string');
+      return parsed
+        .filter((item) => typeof item === 'string')
+        .slice(0, MAX_RECENT_PATHS);
     }
   } catch (err) {
     // ignore malformed storage content
@@ -142,10 +145,6 @@ const Page1: React.FC<Page1Props> = ({
   setAnalysisPath,
   analysisPath,
 }) => {
-  const [ownerId, setOwnerId] = useState<string>(() => {
-    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(OWNER_ID_KEY) : null;
-    return stored || '';
-  });
   const [networkPath, setNetworkPath] = useState<string>('O:\\AI\\projects\\AsusLabel');
   const [recentPaths, setRecentPaths] = useState<string[]>(() => parseStoredList(RECENT_PATH_KEY));
   const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
@@ -160,24 +159,27 @@ const Page1: React.FC<Page1Props> = ({
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [nameFilter, setNameFilter] = useState<string>('');
-  const [dateFilter, setDateFilter] = useState<string>('');
   const [isRenaming, setIsRenaming] = useState<boolean>(false);
   const [renameValue, setRenameValue] = useState<string>('');
 
   const jobsPollRef = useRef<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const isMountedRef = useRef<boolean>(true);
+  const previousSelectedJobIdRef = useRef<string | null>(null);
 
   const selectedJob = useMemo(
     () => jobList.find((job) => job.job_id === selectedJobId) ?? null,
     [jobList, selectedJobId],
   );
 
-  const ownerIdSafe = ownerId.trim() || 'anonymous';
+  const ownerIdSafe = DEFAULT_OWNER_ID;
 
   const rememberPath = useCallback((path: string) => {
     setRecentPaths((previous) => {
-      const deduped = [path, ...previous.filter((item) => item !== path)].slice(0, 5);
+      const deduped = [path, ...previous.filter((item) => item !== path)].slice(
+        0,
+        MAX_RECENT_PATHS,
+      );
       try {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem(RECENT_PATH_KEY, JSON.stringify(deduped));
@@ -188,33 +190,6 @@ const Page1: React.FC<Page1Props> = ({
       return deduped;
     });
   }, []);
-
-  const persistOwnerId = useCallback(
-    (value: string) => {
-      try {
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem(OWNER_ID_KEY, value);
-        }
-      } catch (err) {
-        // ignore
-      }
-    },
-    [],
-  );
-
-  const fetchJobs = useCallback(async () => {
-    try {
-      const response = await axios.get<JobSummary[]>(`${API_BASE_URL}/api/jobs`, {
-        params: { owner_id: ownerIdSafe },
-      });
-      if (!isMountedRef.current) return;
-      setJobList(response.data);
-      setJobsError(null);
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      setJobsError('無法取得工作列表，請稍後再試。');
-    }
-  }, [ownerIdSafe]);
 
   const fetchJobDetail = useCallback(
     async (jobId: string) => {
@@ -234,6 +209,31 @@ const Page1: React.FC<Page1Props> = ({
     },
     [ownerIdSafe, setAnalysisPath, setAnalysisResults],
   );
+
+  const fetchJobs = useCallback(async () => {
+    try {
+      const response = await axios.get<JobSummary[]>(`${API_BASE_URL}/api/jobs`, {
+        params: { owner_id: ownerIdSafe },
+      });
+      if (!isMountedRef.current) return;
+      setJobList(response.data);
+      setJobsError(null);
+
+      if (selectedJobId) {
+        const updatedJob = response.data.find((job) => job.job_id === selectedJobId);
+        if (
+          updatedJob &&
+          FINAL_STATUSES.includes(updatedJob.status) &&
+          (!jobDetail || jobDetail.updated_at !== updatedJob.updated_at)
+        ) {
+          fetchJobDetail(selectedJobId);
+        }
+      }
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      setJobsError('無法取得工作列表，請稍後再試。');
+    }
+  }, [fetchJobDetail, jobDetail, ownerIdSafe, selectedJobId]);
 
   const closeEventSource = useCallback(() => {
     if (eventSourceRef.current) {
@@ -320,19 +320,29 @@ const Page1: React.FC<Page1Props> = ({
   }, [jobList]);
 
   useEffect(() => {
-    if (selectedJob) {
-      setRenameValue(selectedJob.display_name);
-      setIsRenaming(false);
-    } else {
+    const currentJobId = selectedJob?.job_id ?? null;
+    const previousJobId = previousSelectedJobIdRef.current;
+
+    if (!currentJobId || !selectedJob) {
+      previousSelectedJobIdRef.current = null;
       setRenameValue('');
       setIsRenaming(false);
+      return;
     }
-  }, [selectedJob]);
 
-  const handleOwnerChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setOwnerId(event.target.value);
-    persistOwnerId(event.target.value);
-  };
+    if (currentJobId !== previousJobId) {
+      previousSelectedJobIdRef.current = currentJobId;
+      setRenameValue(selectedJob.display_name);
+      setIsRenaming(false);
+      return;
+    }
+
+    previousSelectedJobIdRef.current = currentJobId;
+
+    if (!isRenaming) {
+      setRenameValue(selectedJob.display_name);
+    }
+  }, [isRenaming, selectedJob]);
 
   const handlePathChange = (event: ChangeEvent<HTMLInputElement>) => {
     setNetworkPath(event.target.value);
@@ -425,27 +435,16 @@ const Page1: React.FC<Page1Props> = ({
   const jobFiles = jobDetail?.input_manifest ?? [];
 
   const filteredJobs = useMemo(() => {
-    const nameTerm = nameFilter.trim().toLowerCase();
+    const term = nameFilter.trim().toLowerCase();
+    if (!term) {
+      return jobList;
+    }
     return jobList.filter((job) => {
-      const matchesName = nameTerm ? job.display_name.toLowerCase().includes(nameTerm) : true;
-      if (!matchesName) {
-        return false;
-      }
-      if (!dateFilter) {
-        return true;
-      }
-      try {
-        const jobDate = new Date(job.created_at);
-        if (Number.isNaN(jobDate.getTime())) {
-          return false;
-        }
-        const isoDate = jobDate.toISOString().slice(0, 10);
-        return isoDate === dateFilter;
-      } catch {
-        return false;
-      }
+      const nameMatch = job.display_name.toLowerCase().includes(term);
+      const timestampMatch = formatJobTimestamp(job.created_at).toLowerCase().includes(term);
+      return nameMatch || timestampMatch;
     });
-  }, [jobList, nameFilter, dateFilter]);
+  }, [jobList, nameFilter]);
 
   const allJobsSelected =
     filteredJobs.length > 0 && filteredJobs.every((job) => selectedJobIds.has(job.job_id));
@@ -571,44 +570,21 @@ const Page1: React.FC<Page1Props> = ({
               <strong>工作列表</strong>
             </div>
             <div className="card-body d-flex flex-column" style={{ minHeight: '550px' }}>
-              <div className="mb-3">
-                <label htmlFor="ownerId" className="form-label">
-                  使用者 ID
-                </label>
-                <input
-                  id="ownerId"
-                  className="form-control"
-                  value={ownerId}
-                  onChange={handleOwnerChange}
-                  placeholder="請輸入使用者 ID"
-                />
-              </div>
-
-              <div className="d-flex flex-column gap-2 mb-3">
+              <div className="d-flex gap-2 mb-3">
                 <input
                   className="form-control"
-                  placeholder="搜尋工作名稱"
+                  placeholder="搜尋工作名稱或時間"
                   value={nameFilter}
                   onChange={(event) => setNameFilter(event.target.value)}
                 />
-                <div className="d-flex gap-2">
-                  <input
-                    type="date"
-                    className="form-control"
-                    value={dateFilter}
-                    onChange={(event) => setDateFilter(event.target.value)}
-                  />
-                  <button
-                    className="btn btn-outline-secondary"
-                    type="button"
-                    onClick={() => {
-                      setNameFilter('');
-                      setDateFilter('');
-                    }}
-                  >
-                    清除
-                  </button>
-                </div>
+                <button
+                  className="btn btn-outline-secondary"
+                  type="button"
+                  onClick={() => setNameFilter('')}
+                  disabled={!nameFilter}
+                >
+                  清除
+                </button>
               </div>
 
               <div className="d-flex justify-content-between align-items-center mb-2">

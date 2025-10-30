@@ -1,7 +1,7 @@
 ﻿import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axios from 'axios';
-import Page1, { AnalysisResult } from './Page1';
+import Page1, { AnalysisResult, DEFAULT_OWNER_ID } from './Page1';
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -75,7 +75,7 @@ test('creates a job and streams events to show results', async () => {
   const jobSummary = {
     job_id: 'job-123456',
     display_name: '測試工作',
-    owner_id: 'tester',
+    owner_id: DEFAULT_OWNER_ID,
     source_path: 'C:/data',
     status: 'queued' as const,
     progress: 0,
@@ -192,7 +192,7 @@ test('creates a job and streams events to show results', async () => {
   expect(mockedAxios.post).toHaveBeenCalledWith(
     `${process.env.REACT_APP_API_BASE_URL ?? 'http://localhost:8000'}/api/jobs`,
     expect.objectContaining({
-      owner_id: 'tester',
+      owner_id: DEFAULT_OWNER_ID,
       source_path: 'C:/data',
     }),
   );
@@ -202,7 +202,7 @@ test('creates a job and streams events to show results', async () => {
 
   const eventSource = MockEventSource.instances[0];
   expect(eventSource.url).toContain('/api/jobs/job-123456/events');
-  expect(eventSource.url).toContain('owner_id=tester');
+  expect(eventSource.url).toContain(`owner_id=${encodeURIComponent(DEFAULT_OWNER_ID)}`);
 
   await act(async () => {
     eventSource.onmessage?.({
@@ -223,7 +223,7 @@ test('creates a job and streams events to show results', async () => {
   expect(await screen.findByText('Job completed')).toBeInTheDocument();
   expect(screen.getByText('Model A')).toBeInTheDocument();
   const downloadLink = screen.getByRole('link', { name: '下載結果' }) as HTMLAnchorElement;
-  expect(downloadLink.href).toContain('owner_id=tester');
+  expect(downloadLink.href).toContain(`owner_id=${encodeURIComponent(DEFAULT_OWNER_ID)}`);
 });
 
 test('cancels a running job', async () => {
@@ -232,7 +232,7 @@ test('cancels a running job', async () => {
   const runningJob = {
     job_id: 'job-running',
     display_name: '執行中的工作',
-    owner_id: 'tester',
+    owner_id: DEFAULT_OWNER_ID,
     source_path: 'C:/data',
     status: 'running' as const,
     progress: 0.1,
@@ -293,3 +293,5 @@ test('cancels a running job', async () => {
   );
   expect(cancelCall).toBeDefined();
 });
+
+
