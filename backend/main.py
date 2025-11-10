@@ -44,7 +44,12 @@ def create_app(*, settings: AppSettings | None = None) -> FastAPI:
 
     origins = [
         "http://localhost",
+        "http://localhost:80",
         "http://localhost:3000",
+        "http://localhost:8080",
+        "http://10.100.101.57",
+        "http://10.100.101.57:80",
+        "http://10.100.101.57:8080",
     ]
     app.add_middleware(
         CORSMiddleware,

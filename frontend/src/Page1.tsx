@@ -145,7 +145,7 @@ const Page1: React.FC<Page1Props> = ({
   setAnalysisPath,
   analysisPath,
 }) => {
-  const [networkPath, setNetworkPath] = useState<string>('O:\\AI\\projects\\AsusLabel');
+  const [networkPath, setNetworkPath] = useState<string>('\\\\smpfile11.simplo.com.tw\\AI\\projects\\AsusLabel');
   const [recentPaths, setRecentPaths] = useState<string[]>(() => parseStoredList(RECENT_PATH_KEY));
   const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
@@ -929,8 +929,8 @@ const Page1: React.FC<Page1Props> = ({
               </div>
               <div className="card-body bg-light" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 <ul className="list-unstyled mb-0">
-                  {jobEvents.map((event) => (
-                    <li key={event.event_id} className="mb-2">
+                  {jobEvents.map((event, index) => (
+                    <li key={`${event.event_id ?? 'event'}-${event.created_at}-${index}`} className="mb-2">
                       <div className="small text-muted">{formatTimestamp(event.created_at)}</div>
                       <div
                         className={
