@@ -35,7 +35,9 @@ def configure_logging() -> None:
     from logging import handlers # Import handlers module
     from pathlib import Path
 
-    log_file_path = Path(__file__).resolve().parent / "backend.log"
+    log_dir = Path(__file__).resolve().parent / "log"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file_path = log_dir / "backend.log"
     
     # Create a TimedRotatingFileHandler for daily rotation
     # 'midnight' means rotate at midnight, '1' means rotate every day

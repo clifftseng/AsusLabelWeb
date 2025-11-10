@@ -1,0 +1,96 @@
+﻿搬遷計畫：Windows → Ubuntu 22.04
+===============================
+
+0. 前置資訊蒐集
+- 來源程式已上傳至 GitHub（https://github.com/clifftseng/AsusLabelWeb），Ubuntu 可直接以 `git clone https://github.com/clifftseng/AsusLabelWeb.git /opt/dx/labelwebiste` 取得最新程式碼。
+- 確認現行 Python、pip、Node.js/npm 版本（`python --version`, `pip --version`, `node -v`, `npm -v`）。
+- 盤點機密與設定：`.env`、Azure 金鑰、`job_storage_root`、`backend/job_queue.db`、PDF 格式範本目錄等。
+- 確認 Windows 目前部署路徑及是否有額外排程/服務（例如常駐程式、批次檔）。
+- 如果有使用 SMB/OneDrive 等 Windows 特有掛載，確認在 Ubuntu 的替代方案。
+
+1. Ubuntu 基礎環境
+- 更新系統：`sudo apt update && sudo apt upgrade -y`。
+- 安裝工具：`sudo apt install -y build-essential git curl unzip python3 python3-venv python3-pip libsqlite3-dev`.
+- 安裝 Node.js 18+ 與 npm：
+  - NodeSource 方式：
+    ```
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    sudo apt install -y nodejs
+    ```
+  - 或使用 nvm：
+    ```
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    source ~/.nvm/nvm.sh
+    nvm install 18
+    nvm use 18
+    ```
+- PyMuPDF/fitz 相關的原生套件：`sudo apt install -y libjpeg-dev libopenjp2-7 zlib1g-dev`；openpyxl 為純 Python，無需額外原生依賴。
+
+2. 複製專案與資料
+- 建議直接從 GitHub 重新 clone：`git clone https://github.com/clifftseng/AsusLabelWeb.git /opt/dx/labelwebiste`，之後以 `git pull` 取得更新；若需保留 Windows 未推送的修改，再以 patch/PR 方式同步。
+- 同步必要資源：`.env`、`backend/job_queue.db`、`backend/job_runs/`、自訂 `backend/formats/`、PDF 範例與輸出資料等。
+- 調整擁有者：`sudo chown -R ak:ak /opt/dx/labelwebiste`。
+
+3. 後端部署
+- 進入 `/opt/dx/labelwebiste/backend`，建立虛擬環境：
+  ```
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install --upgrade pip
+  pip install -r requirements.txt
+  ```
+- 新建或更新 `.env`（Linux 路徑）：
+  `JOB_STORAGE_ROOT=/opt/dx/labelwebiste/job_runs`
+  `JOB_QUEUE_URL=sqlite:////opt/dx/labelwebiste/backend/job_queue.db`
+  `ANALYSIS_FORMAT_DIR=/opt/dx/labelwebiste/backend/formats`
+  以及 Azure DI/OpenAI 或其他服務金鑰。
+- 手動啟動測試：`uvicorn backend.main:app --host 0.0.0.0 --port 8000`，確認 job queue 自動建表。
+
+4. 前端部署
+- 於 `/opt/dx/labelwebiste/frontend` 執行 `npm ci`（或 `npm install`）。
+- 設定 `.env`（若使用 Create React App）：
+  `REACT_APP_API_BASE_URL=http://127.0.0.1:8000`（或實際域名）。
+- 建置：`npm run build`，輸出 `frontend/build`。可由 Nginx 直接 serve 或另設靜態目錄。
+
+5. Systemd 自動啟動
+- 假設部署用戶為 `ak`，在 `/etc/systemd/system/asus-label.service`：
+  ```
+  [Unit]
+  Description=ASUS Label Backend Service
+  After=network.target
+
+  [Service]
+  Type=simple
+  User=ak
+  WorkingDirectory=/opt/dx/labelwebiste/backend
+  EnvironmentFile=/opt/dx/labelwebiste/backend/.env
+  ExecStart=/opt/dx/labelwebiste/backend/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
+  Restart=on-failure
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+- 重新載入＆啟動：`sudo systemctl daemon-reload && sudo systemctl enable --now asus-label`。
+- （選配）設定 Nginx 反向代理，將外部流量導向 8000，同時 serve `frontend/build`。
+
+6. 測試與驗證
+- Backend：`pytest backend/tests`（若存在），或以 `curl`/Postman 呼叫 `POST /api/jobs`、`GET /api/jobs`。
+- Frontend：`npm test -- --watch=false`（如適用），或直接在瀏覽器操作：列出 PDF → 建立工作 → 下載 Excel。
+- 確認工作目錄 `/opt/dx/labelwebiste/job_runs` 可寫入，PDF 複製、Excel 匯出與下載正常。
+
+7. 切換與備援
+- Windows 端停止新工作，備份 `job_queue.db` 與輸出資料。
+- 將最新資料同步至 Ubuntu，啟動 systemd 服務後做最終驗證。
+- 切換 DNS/反向代理到新主機；舊機保留一段時間以備回退。
+- 記錄回復流程（例如重新指向舊主機、還原 DB 備份）。
+
+8. 後續維運
+- 設定 `logrotate` 或 journalctl 審查 backend 日誌。
+- 排程備份 `job_queue.db`、`job_runs/`、`.env`。
+- 若有多台 worker，考慮水平擴充（多 systemd 服務或 Kubernetes job）。
+
+補充：若仍缺少以下資訊，請再提供以便調整計畫
+- 實際 Python / Node.js / npm 版本與部署用戶。
+- 是否需與其他內部服務整合（資料庫、檔案伺服器、Azure 資源）及網路限制。
+- 是否需要 HTTPS／網路安全要求（例如憑證管理、WAF）。
+
